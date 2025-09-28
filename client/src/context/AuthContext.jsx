@@ -1,109 +1,196 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-// import axios from "axios";
+// import { createContext, useContext, useEffect, useMemo, useState } from "react";
+// import { supabase } from "../lib/supabase"; // keep relative unless you set "@/"
 
-const AuthContext = createContext();
+// const AuthCtx = createContext({
+//   session: null,
+//   user: null,
+//   loading: true,
+//   signIn: async () => {},
+//   signUp: async () => {},
+//   signOut: async () => {},
+//   getRole: async () => null, // call when you need the role
+// });
 
-export const AuthProvider = ({ children }) => {
-  const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [error, setError] = useState("");
+// export function AuthProvider({ children }) {
+//   const [session, setSession]   = useState(null);
+//   const [user, setUser]         = useState(null);
+//   const [loading, setLoading]   = useState(true);
 
-  // -------- MOCK ACCOUNTS --------
-  const accounts = {
-    superadmin: {
-      username: "superadmin",
-      firstName: "Cardo",
-      lastName: "Dalisay",
-      password: "12345",
-      phoneNumber: "12345678911",
-      sex: "male",
-      email: "cardodalisay@mail.com",
-      address: "Tondo Manila",
-      role: "super-admin",
-    },
-    admin: {
-      username: "admin",
-      firstName: "Justin",
-      lastName: "Bieber",
-      password: "12345",
-      phoneNumber: "12345678911",
-      sex: "male",
-      email: "justinbeiber@mail.com",
-      address: "York New",
-      role: "admin",
-    },
-  };
+//   // Initial session + listener
+//   useEffect(() => {
+//     let mounted = true;
 
-  // -------- PERSISTENCE (load from localStorage) --------
+//     if (!supabase) { // safe if envs missing
+//       setLoading(false);
+//       return;
+//     }
+
+//     supabase.auth.getSession().then(({ data }) => {
+//       if (!mounted) return;
+//       const s = data?.session ?? null;
+//       setSession(s);
+//       setUser(s?.user ?? null);
+//       setLoading(false);
+//     });
+
+//     const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
+//       setSession(s ?? null);
+//       setUser(s?.user ?? null);
+//     });
+
+//     return () => {
+//       mounted = false;
+//       sub?.subscription?.unsubscribe?.();
+//     };
+//   }, []);
+
+//   // --- helpers you can use anywhere ---
+//   const signIn = async ({ email, password }) => {
+//     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+//     if (error) throw error;
+//     return data;
+//   };
+
+//   const signUp = async ({ email, password, options }) => {
+//     const { data, error } = await supabase.auth.signUp({ email, password, options });
+//     if (error) throw error;
+//     return data;
+//   };
+
+//   const signOut = async () => {
+//     const { error } = await supabase.auth.signOut();
+//     if (error) throw error;
+//   };
+
+//     const getRole = async () => {
+//     if (!user) return null;
+//     const { data, error } = await supabase.rpc("get_my_role_name");
+//     if (error) return null;
+//     return data ? String(data).toLowerCase() : null; // 'super-admin' | 'admin' | null
+//   };
+  
+//   // // Fetch role only when you need it (adjust to your schema/RPC)
+//   // const getRole = async () => {
+//   //   if (!user) return null;
+//   //   // Option A: RPC you already use on mobile
+//   //   const { data, error } = await supabase.rpc("get_my_role_name");
+//   //   if (!error && data) return String(data).toLowerCase();
+
+//   //   // Option B (if you prefer table join):
+//   //   // const { data, error } = await supabase
+//   //   //   .from("app_users")
+//   //   //   .select("role:role(role_name)")
+//   //   //   .eq("user_id", user.id)
+//   //   //   .single();
+//   //   // return (!error && data?.role?.role_name) ? data.role.role_name.toLowerCase() : null;
+
+//   //   return null;
+//   // };
+
+//   const value = useMemo(
+//     () => ({ session, user, loading, signIn, signUp, signOut, getRole }),
+//     [session, user, loading]
+//   );
+
+//   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
+// }
+
+// export function useAuth() {
+//   return useContext(AuthCtx);
+// }
+// AuthContext.jsx
+
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { supabase } from "../lib/supabase";
+
+const AuthCtx = createContext({
+  session: null,
+  user: null,
+  loading: true,
+  signIn: async () => {},
+  signUp: async () => {},
+  signOut: async () => {},
+  getRole: async () => null,
+});
+
+export function AuthProvider({ children }) {
+  const [session, setSession] = useState(null);
+  const [user, setUser]       = useState(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    let mounted = true;
+
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      const s = data?.session ?? null;
+      setSession(s);
+      setUser(s?.user ?? null);
+      setLoading(false);
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      // keep state in sync with Supabase events
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+        setUser(null);
+      } else {
+        setSession(s ?? null);
+        setUser(s?.user ?? null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
   }, []);
 
-  const login = async (username, password) => {
-    setError("");
-
-    // -------- MOCK LOGIN --------
-    const account = Object.values(accounts).find(
-      (acc) => acc.username === username && acc.password === password
-    );
-
-    if (account) {
-      setUser(account);
-      localStorage.setItem("user", JSON.stringify(account)); // persist user
-
-      // Role-based navigation
-      if (account.role === "super-admin") {
-        navigate("/super-admin");
-      } else if (account.role === "admin") {
-        navigate("/admin");
-      }
-    } else {
-      setError("Invalid username or password");
-    }
-
-    // -------- REAL API LOGIN (replace later) --------
-    // -------- Import axios first ----------
-    // import axios from "axios"; <--- add this above
-    /*
-    try {
-      const response = await axios.post("http://localhost:8000/api/login/", {
-        username,
-        password,
-      });
-
-      const data = response.data;
-
-      setUser(data.user);
-      localStorage.setItem("user", JSON.stringify(data.user)); // persist user
-
-      if (data.user.role === "super-admin") {
-        navigate("/super-admin");
-      } else if (data.user.role === "admin") {
-        navigate("/admin");
-      }
-    } catch (err) {
-      setError("Invalid username or password");
-      console.error("Login error:", err);
-    }
-    */
+  // ---------- auth helpers ----------
+  const signIn = async ({ email, password }) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
   };
 
-  const logout = () => {
+  const signUp = async ({ email, password, options }) => {
+    const { data, error } = await supabase.auth.signUp({ email, password, options });
+    if (error) throw error;
+    return data;
+  };
+
+  // ✅ Fully clear session *and* in-memory state
+  const signOut = async (scope = "local") => {
+    const { error } = await supabase.auth.signOut({ scope }); // "local" or "global"
+    if (error) throw error;
+
+    // proactively clear local state so UI updates immediately
+    setSession(null);
     setUser(null);
-    localStorage.removeItem("user"); // clear persistence
-    navigate("/signin");
+
+    // (optional) nuke stubborn dev tokens if you still see ghost sessions
+    // Object.keys(localStorage)
+    //   .filter(k => k.startsWith("sb-") && k.endsWith("-auth-token"))
+    //   .forEach(k => localStorage.removeItem(k));
   };
 
-  return (
-    <AuthContext.Provider value={{ user, error, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  // context/AuthContext.jsx
+  const getRole = async () => {
+    if (!user) return null;
+    const { data, error } = await supabase.rpc("get_role_web");
+    if (error) throw error;
+    return data ? String(data).toLowerCase() : null;  // 'admin' | 'superadmin'
+  };
 
-// Custom hook to use Auth context
-export const useAuth = () => useContext(AuthContext);
+  const value = useMemo(
+    () => ({ session, user, loading, signIn, signUp, signOut, getRole }),
+    [session, user, loading]
+  );
+
+  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
+}
+
+export function useAuth() {
+  return useContext(AuthCtx);
+}

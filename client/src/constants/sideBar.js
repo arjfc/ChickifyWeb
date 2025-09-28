@@ -1,25 +1,23 @@
-import { 
-  FiHome, 
-  FiUsers, 
-  FiShoppingCart, 
-  FiTag, 
-  FiActivity, 
-  FiBarChart2, 
-  FiSettings 
-} from "react-icons/fi";
+// src/constants/sidebar.js
 
-import {CiGrid42} from "react-icons/ci"
-import { LuUserCog } from "react-icons/lu"
+// Icons
+import { FiSettings } from "react-icons/fi";
+import { CiGrid42 } from "react-icons/ci";
+import { LuUserCog, LuClock2, LuReceipt, LuMessageCircleMore } from "react-icons/lu";
 import { RiShoppingBag3Line } from "react-icons/ri";
 import { GrBasket } from "react-icons/gr";
 import { TbCoins } from "react-icons/tb";
-import { LuClock2, LuReceipt } from "react-icons/lu";
 import { IoFolderOpenOutline } from "react-icons/io5";
 import { IoMdMegaphone } from "react-icons/io";
-import { LuTriangleAlert, LuMessageCircleMore } from "react-icons/lu";
 
-
+/**
+ * Sidebar configuration
+ * role keys must match what your AuthContext exposes:
+ *  - "super-admin"
+ *  - "admin"
+ */
 export const sidebarItems = [
+  // Shared
   {
     label: "Dashboard",
     path: {
@@ -38,7 +36,8 @@ export const sidebarItems = [
     icon: LuUserCog,
     roles: ["super-admin", "admin"],
   },
-  // Items only for super-admin
+
+  // Super Admin only
   {
     label: "Product Management",
     path: { "super-admin": "/super-admin/product-management" },
@@ -63,28 +62,17 @@ export const sidebarItems = [
     icon: LuClock2,
     roles: ["super-admin"],
   },
-  // Items only for admin
+
+  // Admin only
   {
     label: "Products",
     icon: RiShoppingBag3Line,
     roles: ["admin"],
     children: [
-      {
-        label: "Egg Pick-up",
-        path: { admin: "/admin/products/egg-pickup" },
-      },
-      {
-        label: "Product Details",
-        path: { admin: "/admin/products/details" },
-      },
-      {
-        label: "Discount Management",
-        path: { admin: "/admin/products/discount-management" },
-      },
-      {
-        label: "Price Management",
-        path: { admin: "/admin/products/price-management" },
-      },
+      { label: "Egg Pick-up",       path: { admin: "/admin/products/egg-pickup" } },
+      { label: "Product Details",   path: { admin: "/admin/products/details" } },
+      { label: "Discount Management", path: { admin: "/admin/products/discount-management" } },
+      { label: "Price Management",  path: { admin: "/admin/products/price-management" } },
     ],
   },
   {
@@ -92,14 +80,8 @@ export const sidebarItems = [
     icon: TbCoins,
     roles: ["admin"],
     children: [
-      {
-        label: "Feed Monitoring",
-        path: { admin: "/admin/expenses/feed-monitoring" },
-      },
-      {
-        label: "Business",
-        path: { admin: "/admin/expenses/business" },
-      },
+      { label: "Feed Monitoring", path: { admin: "/admin/expenses/feed-monitoring" } },
+      { label: "Business",        path: { admin: "/admin/expenses/business" } },
     ],
   },
   {
@@ -115,7 +97,7 @@ export const sidebarItems = [
     roles: ["admin"],
   },
   {
-    label: "Messagess",
+    label: "Messages",
     path: { admin: "/admin/messages" },
     icon: LuMessageCircleMore,
     roles: ["admin"],
@@ -126,6 +108,8 @@ export const sidebarItems = [
     icon: LuReceipt,
     roles: ["admin"],
   },
+
+  // Shared
   {
     label: "Reports",
     path: {
@@ -146,4 +130,4 @@ export const sidebarItems = [
   },
 ];
 
-
+export default sidebarItems;

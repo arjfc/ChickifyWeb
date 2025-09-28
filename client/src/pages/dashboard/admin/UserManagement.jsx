@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import UserTable from "../../../components/UserTable";
+import UserFarmerTable from "../../../components/admin/tables/UserFarmerTable";
 import SusActTable from "../../../components/admin/tables/SusActTable";
 import { LuUserRound } from "react-icons/lu";
 import DashboardCard from "../../../components/DashboardCard";
@@ -10,6 +10,7 @@ import {
 import { BsGrid } from "react-icons/bs";
 import { PiSealWarningBold } from "react-icons/pi";
 import { DatePicker } from "@mui/x-date-pickers";
+import FarmerRequestsTable from "../../../components/admin/tables/FarmerRequest";
 
 export default function UserManagement() {
   // Tabs for Farmer / Buyer
@@ -20,6 +21,9 @@ export default function UserManagement() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedMainType, setSelectedMainType] = useState("All");
   const mainTypes = ["All", "Active", "Inactive", "Deactivated"];
+
+  const [refreshTick, setRefreshTick] = useState(0);
+  const bumpRefresh = () => setRefreshTick(t => t + 1);
 
   // Calendar
   const [value, onChange] = useState(new Date());
@@ -105,12 +109,30 @@ export default function UserManagement() {
         </div>
       </div>
 
+      {/* Farmer Requests (only when Farmer tab is active) */}
+      {selectedUserOption === "Farmer" && (
+        <>
+          <div className="col-span-3">
+            <h1 className="text-2xl font-bold text-primaryYellow">Farmer Verification</h1>
+          </div>
+          <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg">
+            <FarmerRequestsTable
+              // NEW:
+              refreshTick={refreshTick}
+              onActionComplete={bumpRefresh}  // 🔁 after approve/reject, refresh other tables
+            />
+          </div>
+        </>
+      )}
+
       {/* User Table */}
       <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg">
-        <UserTable
+        <UserFarmerTable
           role={"admin"}
           option={selectedUserOption}
           type={selectedMainType}
+          // NEW:
+          refreshTick={refreshTick}          // 🔁 refetch when FarmerRequests changes
         />
       </div>
 
