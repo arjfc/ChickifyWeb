@@ -6,7 +6,7 @@ export default function Business() {
   return (
     <div className="grid grid-cols-3 gap-5">
       <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg flex">
-        <div onClick={() => alert('clicked')} className="cursor-pointer bg-primaryYellow text-white text-lg font-bold rounded-lg px-5 py-3">
+        <div onClick={() => alert('clicked')} className="cursor-pointer bg-primaryYellow text-white text-md font-bold rounded-lg px-5 py-3">
           Generate Report
         </div>
       </div>

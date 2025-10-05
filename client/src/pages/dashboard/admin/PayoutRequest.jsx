@@ -40,13 +40,13 @@ export default function PayoutRequest() {
           />
           <div
             onClick={() => alert("clicked")}
-            className="cursor-pointer bg-gray-600 text-white text-lg font-bold rounded-lg px-5 py-3"
+            className="cursor-pointer bg-gray-600 text-white text-md font-bold rounded-lg px-5 py-2"
           >
             Reject
           </div>
           <div
             onClick={() => alert("clicked")}
-            className="cursor-pointer bg-primaryYellow text-white text-lg font-bold rounded-lg px-5 py-3"
+            className="cursor-pointer bg-primaryYellow text-white text-md font-bold rounded-lg px-5 py-2"
           >
             Approve
           </div>

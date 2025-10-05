@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import ComplaintTable from "../../../components/admin/tables/ComplaintTable";
 import { DatePicker } from "@mui/x-date-pickers";
-
 export default function Complaints() {
   const options = ["In Review", "Resolved", "Refunded"];
   const [selectedOption, setSelectedOption] = useState("In Review");
@@ -16,7 +15,7 @@ export default function Complaints() {
             <div
               key={data}
               onClick={() => setSelectedOption(data)}
-              className={`text-2xl font-semibold px-4 py-2 cursor-pointer transition-colors duration-200 ${
+              className={`text-xl font-semibold px-4 py-2 cursor-pointer transition-colors duration-200 ${
                 selectedOption === data
                   ? "text-primaryYellow font-semibold border-b-4 border-primaryYellow"
                   : "text-gray-400"
@@ -28,19 +27,23 @@ export default function Complaints() {
         </div>
 
         <div className="flex flex-row justify-between items-center gap-5">
-          <DatePicker
-            label="Filter by Date"
+         <DatePicker label="Filter by Date"
             onChange={(newValue) => onChange(newValue)}
-          />
+            slotProps={{
+            textField: {
+                size: "small",       // makes it compact
+                sx: { width: 180 },  // adjust width as needed
+          },
+          }}/>
           <div
             onClick={() => alert("clicked")}
-            className="cursor-pointer bg-gray-600 text-white text-lg font-bold rounded-lg px-5 py-3"
+            className="cursor-pointer bg-gray-600 text-white text-md font-bold rounded-lg px-5 py-2"
           >
             Refund
           </div>
           <div
             onClick={() => alert("clicked")}
-            className="cursor-pointer bg-primaryYellow text-white text-lg font-bold rounded-lg px-5 py-3"
+            className="cursor-pointer bg-primaryYellow text-white text-md font-bold rounded-lg px-5 py-2"
           >
             Resolve
           </div>

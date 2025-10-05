@@ -11,8 +11,8 @@ export default function EditAdmin() {
   if (!user) return <p>No user data provided</p>;
 
   return (
-    <div className="flex flex-col items-center mt-10">
-      <div className="relative w-full max-w-4xl bg-white rounded-xl border border-gray-200 shadow-lg px-8 py-8 space-y-6">
+    <div className="flex flex-col items-start mt-10 ml-1"> 
+  <div className="relative w-full max-w-8xl bg-white rounded-xl border border-gray-300 shadow-lg px-8 py-8 space-y-6">
         
         {/* Profile Image + Upload + Reset Password */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -32,9 +32,9 @@ export default function EditAdmin() {
               </div>
             </div>
           </div>
-          <button className="cursor-pointer px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200">
-            Reset Password
-          </button>
+          <button className="cursor-pointer px-4 py-2 bg-[#605c5c] text-white font-semibold rounded-md shadow-sm hover:bg-[#4a4747]">
+          Reset Password
+        </button>
         </div>
 
         {/* Form */}
@@ -117,21 +117,21 @@ export default function EditAdmin() {
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className="flex justify-end gap-3 pt-4">
-          <button
-            className="cursor-pointer text-sm rounded-lg text-primaryYellow font-bold shadow-md bg-yellow-100 px-6 py-2"
-            onClick={() => navigate('/super-admin/users')}
-          >
-            Cancel
-          </button>
-          <button
-            className="cursor-pointer text-sm rounded-lg text-white font-bold shadow-md bg-primaryYellow px-6 py-2"
-            onClick={() => navigate('/super-admin/users')}
-          >
-            Save Changes
-          </button>
-        </div>
+       {/* Buttons */}
+      <div className="flex justify-end gap-3 pt-4">
+      <button
+        className="cursor-pointer text-sm rounded-lg font-bold shadow-md px-6 py-2"
+        style={{ backgroundColor: "#fff49c", color: "#D7A408" }}
+        onClick={() => navigate('/super-admin/users')}>
+         Cancel
+      </button>
+       <button
+        className="cursor-pointer text-sm rounded-lg text-white font-bold shadow-md px-6 py-2"
+        style={{ backgroundColor: "#FEC617" }}
+        onClick={() => navigate('/super-admin/users')}>
+        Save Changes
+      </button>
+      </div>
       </div>
     </div>
   );

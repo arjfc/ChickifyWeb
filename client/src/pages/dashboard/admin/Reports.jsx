@@ -18,7 +18,7 @@ export default function Reports() {
             <div
               key={data}
               onClick={() => setSelectedOption(data)}
-              className={`text-fluid-xl font-semibold px-4 py-2 cursor-pointer transition-colors duration-200 ${
+              className={`text-fluid-lg font-semibold px-4 py-2 cursor-pointer transition-colors duration-200 ${
                 selectedOption === data
                   ? "text-primaryYellow font-semibold border-b-4 border-primaryYellow"
                   : "text-gray-400"
@@ -51,7 +51,7 @@ export default function Reports() {
           />
           <div
             onClick={() => alert("clicked")}
-            className="bg-primaryYellow cursor-pointer text-white text-lg font-bold rounded-lg px-5 py-3"
+            className="bg-primaryYellow cursor-pointer text-white text-lg font-bold rounded-lg px-5 py-2"
           >
             Generate Report
           </div>

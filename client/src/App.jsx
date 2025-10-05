@@ -112,9 +112,12 @@ import SuperAdminUserView from "./components/super-admin/users/ViewAdmin";
 import SuperAdminUserEdit from "./components/super-admin/users/EditAdmin";
 import AdminUserView from "./components/admin/users/ViewAdmin";
 import AdminUserEdit from "./components/admin/users/EditAdmin";
+import NotificationsPage from "./components/NotificationsPage";
+import SuspiciousActivities from "./pages/dashboard/super-admin/SuspiciousActivities";
 import PriceManagement from "./pages/dashboard/admin/PriceManagement";
-import EggPickUp from "./pages/dashboard/admin/EggPickUp";
+import EggInventory from "./pages/dashboard/admin/EggInventory";
 import FeedMonitoring from "./pages/dashboard/admin/FeedMonitoring";
+import Expense from "./pages/dashboard/admin/Expense";
 import Business from "./pages/dashboard/admin/Business";
 import Messages from "./pages/dashboard/admin/Messages";
 import NotFound from "./pages/404";
@@ -152,12 +155,15 @@ export default function App() {
               <Route path="users" element={<UserManagement />} />
               <Route path="users/view-users" element={<SuperAdminUserView />} />
               <Route path="users/edit-users" element={<SuperAdminUserEdit />} />
+              <Route path="suspicious-activities" element={<SuspiciousActivities />} />
               <Route path="orders" element={<Orders />} />
               <Route path="product-management" element={<ProductManagement />} />
               <Route path="pricing" element={<PricingManagement />} />
               <Route path="activity-logs" element={<ActivityLogs />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+
             </Route>
           </Route>
 
@@ -169,18 +175,20 @@ export default function App() {
               <Route path="users/view-users" element={<AdminUserView />} />
               <Route path="users/edit-users" element={<AdminUserEdit />} />
               <Route path="products/product-details" element={<ProductDetails />} />
-              <Route path="products/egg-pickup" element={<EggPickUp />} />
+              <Route path="products/egg-inventory" element={<EggInventory />} />
               <Route path="products/details" element={<ProductDetails />} />
               <Route path="products/discount-management" element={<DiscountManagement />} />
               <Route path="products/price-management" element={<PriceManagement />} />
               <Route path="expenses/feed-monitoring" element={<FeedMonitoring />} />
               <Route path="expenses/business" element={<Business />} />
+              <Route path="expenses/expense" element={<Expense />} />
               <Route path="order-status" element={<OrderStatus />} />
               <Route path="complaints" element={<Complaints />} />
               <Route path="messages" element={<Messages />} />
               <Route path="payout-request" element={<PayoutRequest />} />
               <Route path="reports" element={<AdminReports />} />
               <Route path="settings" element={<AdminSettings />} />
+              <Route path="notifications" element={<NotificationsPage />} />
             </Route>
           </Route>
 

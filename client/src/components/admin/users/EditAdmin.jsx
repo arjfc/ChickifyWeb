@@ -10,8 +10,8 @@ export default function EditAdmin() {
   if (!user) return <p>No user data provided</p>;
 
   return (
-    <div className="flex flex-col items-center mt-3 px-4 sm:px-6">
-      <div className="relative w-full max-w-5xl bg-white rounded-xl border border-gray-200 shadow-lg px-6 sm:px-10 py-6 sm:py-10 space-y-6">
+    <div className="w-full">
+      <div className="mt-10 ml-0 w-full max-w-8xl rounded-2xl border border-gray-300 bg-white px-12 pt-10 pb-12 shadow-lg">
         {/* Profile Image + Name */}
         <div className="flex items-center gap-4">
           <FaUserCircle className="w-16 h-16 sm:w-20 sm:h-20 text-gray-400" />
@@ -116,7 +116,7 @@ export default function EditAdmin() {
               Address
             </label>
             <textarea
-              rows={3}
+              rows={2}
               defaultValue={user.address || ""}
               className="w-full px-3 py-2 rounded-md border border-gray-300 text-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 resize-none"
             />
@@ -126,13 +126,13 @@ export default function EditAdmin() {
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row justify-end gap-4">
           <button
-            className="w-full sm:w-auto cursor-pointer text-base sm:text-lg rounded-lg text-primaryYellow font-bold shadow-md bg-yellow-100 px-6 sm:px-8 py-2 sm:py-3 hover:bg-yellow-200"
+            className="w-full sm:w-auto mt-4 cursor-pointer text-base sm:text-md rounded-lg text-primaryYellow font-bold shadow-md bg-yellow-100 px-6 sm:px-8 py-2 sm:py-3 hover:bg-yellow-200"
             onClick={() => navigate("/admin/users")}
           >
             Cancel
           </button>
           <button
-            className="w-full sm:w-auto cursor-pointer text-base sm:text-lg rounded-lg text-white font-bold shadow-md bg-primaryYellow px-6 sm:px-8 py-2 sm:py-3 hover:opacity-90"
+            className="w-full sm:w-auto mt-4 cursor-pointer text-base sm:text-md rounded-lg text-white font-bold shadow-md bg-primaryYellow px-6 sm:px-8 py-2 sm:py-3 hover:opacity-90"
             onClick={() => navigate("/admin/users")}
           >
             Save Changes

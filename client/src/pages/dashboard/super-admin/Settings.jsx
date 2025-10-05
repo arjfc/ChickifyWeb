@@ -8,7 +8,7 @@ export default function Settings() {
   console.log(user);
 
   return (
-    <div className="px-10 py-6 rounded-lg border border-gray-200 shadow-lg mt-5 flex flex-col gap-5">
+    <div className="px-10 py-6 rounded-lg border border-gray-300 shadow-lg mt-5 flex flex-col gap-5">
       <div className="flex flex-row gap-5 items-center">
         <FaUserCircle className="w-25 h-25" />
         <div className="flex gap-5 h-full items-end">
@@ -159,7 +159,7 @@ export default function Settings() {
             name="address"
             value={user.address}
             rows={3}
-            className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400 resize-none h-24"
+            className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400 resize-none h-15"
           />
         </div>
       </div>

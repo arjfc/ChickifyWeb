@@ -391,7 +391,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
                                         : "text-black hover:bg-yellow-400"
                                     }`
                                   }
-                                  onClick={() => setOpenDropdown("")}
+                                  // onClick={() => setOpenDropdown("")}
                                 >
                                   {child.label}
                                 </NavLink>

@@ -89,7 +89,7 @@ export default function Reports() {
         </div>
         <div
           onClick={() => alert("clicked")}
-          className="cursor-pointer bg-primaryYellow text-white text-lg font-bold rounded-lg p-3"
+          className="cursor-pointer bg-primaryYellow text-white text-lg font-bold rounded-lg p-2"
         >
           Generate Report
         </div>
