@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@100..900&display=swap");
-
 @theme {
   --color-primaryYellow: #fec619;
   --color-softWhite: rgba(255, 255, 255, 0.6);

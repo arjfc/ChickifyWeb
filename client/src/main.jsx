@@ -35,7 +35,7 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
     <AuthProvider>
-      <App />
+        <App />
     </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
