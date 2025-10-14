@@ -1,8 +1,11 @@
+//COMPLAINTS
 import React, { useState } from "react";
 import ComplaintTable from "../../../components/admin/tables/ComplaintTable";
 import { DatePicker } from "@mui/x-date-pickers";
+
 export default function Complaints() {
-  const options = ["In Review", "Resolved", "Refunded"];
+  // Removed "Resolved"
+  const options = ["In Review", "Refunded"];
   const [selectedOption, setSelectedOption] = useState("In Review");
 
   const [value, onChange] = useState(new Date());
@@ -27,25 +30,25 @@ export default function Complaints() {
         </div>
 
         <div className="flex flex-row justify-between items-center gap-5">
-         <DatePicker label="Filter by Date"
+          <DatePicker
+            label="Filter by Date"
             onChange={(newValue) => onChange(newValue)}
             slotProps={{
-            textField: {
-                size: "small",       // makes it compact
-                sx: { width: 180 },  // adjust width as needed
-          },
-          }}/>
+              textField: {
+                size: "small",
+                sx: { width: 180 },
+              },
+            }}
+          />
+          {/* Keep only Refund */}
           <div
-            onClick={() => alert("clicked")}
+            onClick={() => {
+              // 🔹 ADDED: trigger the refund modal in ComplaintTable
+              window.dispatchEvent(new CustomEvent("openRefundModal"));
+            }}
             className="cursor-pointer bg-gray-600 text-white text-md font-bold rounded-lg px-5 py-2"
           >
             Refund
-          </div>
-          <div
-            onClick={() => alert("clicked")}
-            className="cursor-pointer bg-primaryYellow text-white text-md font-bold rounded-lg px-5 py-2"
-          >
-            Resolve
           </div>
         </div>
       </div>
