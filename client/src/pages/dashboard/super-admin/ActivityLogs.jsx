@@ -1,17 +1,23 @@
 import { useState, useEffect } from "react";
-import LogsTable from "../../../components/super-admin/tables/LogsTable";
+import LogsTable from "@/components/super-admin/tables/LogsTable";
+import TrackUserTable from "@/components/super-admin/tables/TrackUserLoginTable";
 import { BsGrid } from "react-icons/bs";
 import { fetchAllActionType } from "@/services/activityLogs";
 import { LuCalendar } from "react-icons/lu";
 
 export default function ActivityLogs() {
+  // ===== Activity Logs (tabs) =====
   const adminOptions = ["Admin", "Farmer", "Buyer"];
   const [selectedAdminOption, setSelectedAdminOption] = useState("Admin");
 
-  // dropdown states
+  // ===== Activity logs filters =====
   const [dateRange, setDateRange] = useState("all"); 
   const [types, setTypes] = useState(["All"]);
   const [selectedType, setSelectedType] = useState("All");
+
+  // ===== Track Last Sign-ins filters =====
+  const [loginRole, setLoginRole] = useState("All");          
+  const [loginDateRange, setLoginDateRange] = useState("all"); 
 
   const dateOptions = [
     { value: "all", label: "All time" },
@@ -34,8 +40,9 @@ export default function ActivityLogs() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Tabs (compact) */}
+    <div className="flex flex-col gap-6">
+      
+      {/* =================== Activity Logs =================== */}
       <div className="flex items-center bg-primaryYellow p-2 rounded-xl">
         <div className="flex gap-2">
           {adminOptions.map((opt) => (
@@ -54,9 +61,7 @@ export default function ActivityLogs() {
         </div>
       </div>
 
-      {/* Filters Row (compact; clamp svg sizes) */}
       <div className="flex items-center gap-3 [&_svg]:w-4 [&_svg]:h-4">
-        {/* Date Range Dropdown — same UI as Action Type */}
         <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
           <LuCalendar className="text-gray-600" />
           <select
@@ -72,7 +77,6 @@ export default function ActivityLogs() {
           </select>
         </div>
 
-        {/* Action Type Dropdown — unchanged */}
         <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
           <BsGrid className="text-gray-600" />
           <select
@@ -87,15 +91,56 @@ export default function ActivityLogs() {
             ))}
           </select>
         </div>
-
       </div>
 
-      {/* Logs Table */}
-        <LogsTable
-          selectedOption={selectedAdminOption}
-          type={selectedType}
-          dateRange={dateRange}   
-        />
+      <LogsTable
+        selectedOption={selectedAdminOption}
+        type={selectedType}
+        dateRange={dateRange}
+      />
+
+      {/* =================== Track last sign-ins =================== */}
+      <div className="flex items-center justify-between mt-4">
+        <h2 className="text-xl font-semibold text-grey-800">TRACK LAST SIGN-INS</h2>
+
+        <div className="flex items-center gap-3 [&_svg]:w-4 [&_svg]:h-4">
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
+            <LuCalendar className="text-gray-600" />
+            <select
+              value={loginDateRange}
+              onChange={(e) => setLoginDateRange(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {dateOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
+            <BsGrid className="text-gray-600" />
+            <select
+              value={loginRole}
+              onChange={(e) => setLoginRole(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {["All", "admin", "farmer", "buyer"].map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <TrackUserTable
+        limit={15}
+        userrole={loginRole}   
+        date={loginDateRange}  
+      />
     </div>
   );
 }

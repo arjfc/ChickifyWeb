@@ -14,9 +14,29 @@ export async function fetchActivityLogs({ action_type = null } = {}) {
   return data || [];
 }
 
+//view function: get all action type and populate it
 export async function fetchAllActionType() {
   const { data, error } = await supabase.rpc("get_all_activity_types");
   if (error) throw new error();
-  console.log(data);
   return data.map((row) => row.action_type);
+}
+
+//view function: get last signins with limit
+export async function fetchLastSignins({
+  limit = 20,
+  offset = null,
+  role = null,
+  s_date = null,
+  e_date = null,
+} = {}) {
+  const { data, error } = await supabase.rpc("get_last_signins", {
+    p_limit: limit,
+    p_offset: offset,
+    role_filter: role,
+    start_date: s_date,
+    end_date: e_date,
+  });
+
+  if (error) throw error;
+  return data || [];
 }

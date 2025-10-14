@@ -67,7 +67,7 @@ export default function LogsTable({ selectedOption, type, dateRange }) {
     });
   }, [rows, selectedOption, dateRange]);
 
-  const headers = ["Timestamp", "User", "Role", "Action Type", "Order ID", "Details"];
+  const headers = ["TIMESTAMP", "FULLNAME", "ROLE", "ACTION TYPE", "ORDER ID", "DETAILS"];
   const fmt = (iso) =>
     new Date(iso).toLocaleString("en-US", {
       month: "long",
@@ -86,25 +86,34 @@ export default function LogsTable({ selectedOption, type, dateRange }) {
         <thead className="sticky top-0 bg-white z-10">
           <tr className="text-yellow-500 border-b border-gray-300">
             {headers.map((h, i) => (
-              <th key={i} className="px-6 py-5 text-center font-semibold">
+              <th key={i} className="px-6 py-5 text-center font-medium">
                 {h}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {filtered.map((r) => (
-            <tr key={r.activity_id} className="text-gray-700 border-b border-gray-200">
-              <td className="px-4 py-3 text-center font-medium">{fmt(r.created_at)}</td>
-              <td className="px-4 py-3 text-center">{r.actor_user ?? "(no name)"}</td>
-              <td className="px-4 py-3 text-center">{r.actor_role}</td>
-              <td className="px-4 py-3 text-center">{r.action_type}</td>
-              <td className="px-4 py-3 text-center">{r.order_id}</td>
-              <td className="px-4 py-3 text-center">{r.description ?? ""}</td>
+          {filtered.length === 0 ? (
+            <tr>
+              <td colSpan={headers.length} className="px-6 py-10 text-center text-gray-500">
+                No activity logs match these filters.
+              </td>
             </tr>
-          ))}
+          ) : (
+            filtered.map((r) => (
+              <tr key={r.activity_id} className="text-gray-700 border-b border-gray-200">
+                <td className="px-4 py-3 text-center font-medium">{fmt(r.created_at)}</td>
+                <td className="px-4 py-3 text-center">{r.actor_user ?? "(no name)"}</td>
+                <td className="px-4 py-3 text-center">{r.actor_role}</td>
+                <td className="px-4 py-3 text-center">{r.action_type}</td>
+                <td className="px-4 py-3 text-center">{r.order_id}</td>
+                <td className="px-4 py-3 text-center">{r.description ?? ""}</td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
   );
+
 }
