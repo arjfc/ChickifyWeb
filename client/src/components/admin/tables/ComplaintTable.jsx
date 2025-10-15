@@ -1,10 +1,13 @@
-//COMPLAINTS TABLE
+// COMPLAINTS TABLE
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import dayjs from "dayjs";
 import Table from "../../Table";
 import { FaCircleInfo } from "react-icons/fa6";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import Modal from "react-modal";
 import eggImage from "../../../assets/egg.png";
+import { viewRefundOverviewAdmin, approveRefundAdmin } from "@/services/Refund";
+import { supabase } from "@/lib/supabase";
 
 const modalStyle = {
   content: {
@@ -25,60 +28,118 @@ const modalStyle = {
   },
 };
 
+// ---------- Upload helper (your code, JS) ----------
+const guessTypeFromName = (name) => {
+  if (!name) return "image/jpeg";
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
+};
+
+/**
+ * Upload an image (by URI) to Supabase Storage and return its public URL.
+ * @param {number} id
+ * @param {{ uri: string, type?: string|null, fileName?: string|null }} img
+ * @param {string} [bucketName="refund-proofs"]
+ * @param {string} [folder="refunds"]
+ * @returns {Promise<string>} public URL
+ */
+async function uploadImageFromUrl(
+  id,
+  img,
+  bucketName = "refund-proofs",
+  folder = "refunds"
+) {
+  const fileName = img.fileName ?? `proof_${Date.now()}.jpg`;
+  const path = `${folder}/${id}/${fileName}`;
+
+  const res = await fetch(img.uri);
+  if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
+  const bytes = await res.arrayBuffer();
+
+  const headerType = res.headers.get("content-type") || undefined;
+  const contentType = img.type || headerType || guessTypeFromName(fileName);
+
+  const { error: uploadError } = await supabase.storage
+    .from(bucketName)
+    .upload(path, bytes, { contentType, upsert: true });
+
+  if (uploadError) throw uploadError;
+
+  const { data, error: urlError } = supabase.storage.from(bucketName).getPublicUrl(path);
+  if (urlError || !data?.publicUrl) throw urlError ?? new Error("No public URL returned");
+
+  return data.publicUrl;
+}
+
+// PH-friendly date (no time)
+const parseAsLocalDate = (s) => {
+  if (typeof s !== "string") return null;
+  const onlyDate = /^\d{4}-\d{2}-\d{2}$/;
+  if (onlyDate.test(s)) {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0); // local
+  }
+  const dt = new Date(s);
+  return isNaN(dt) ? null : dt;
+};
+
+const fmtPHDate = (v) => {
+  if (!v) return "—";
+  const dt = typeof v === "string" ? (parseAsLocalDate(v) || new Date(v)) : new Date(v);
+  if (!dt || isNaN(dt)) return "—";
+  return dt.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+};
+
 // Style only for the Refund modal (card look)
 const refundModalStyle = {
   content: {
     ...modalStyle.content,
     width: "720px",
     padding: 0,
-    overflow: "auto", // allow scrolling so footer doesn't disappear
+    overflow: "auto",
     borderRadius: 24,
   },
   overlay: modalStyle.overlay,
 };
 
-const rows = [
-  {
-    refundId: "RF-1001",
-    customerName: "Maria Lopez",
-    orderId: "ORD-001",
-    reason: "Damaged eggs upon arrival",
-    imageProof: eggImage,
-    totalAmountPaid: 1200.0,
-    quantityOrdered: 5,
-    deliveryFee: 100,
-    serviceFee: 20,
-    modeOfPayment: "PayPal",
-    gcashName: "Maria Lopez",
-    gcashNumber: "09171234567",
-    deliveryDate: "2025-10-02",
-    dateSubmitted: "2025-10-03",
-    status: "In Review",
-    refundedOn: null,
-    payoutInfoId: null,
-  },
-  {
-    refundId: "RF-1002",
-    customerName: "Justin Bieber",
-    orderId: "ORD-002",
-    reason: "Wrong size delivered",
-    imageProof: "https://via.placeholder.com/120x80.png?text=Proof",
-    totalAmountPaid: 950.0,
-    quantityOrdered: 3,
-    deliveryFee: 80,
-    serviceFee: 15,
-    modeOfPayment: "COD",
-    gcashName: null,
-    gcashNumber: null,
-    deliveryDate: "2025-10-01",
-    dateSubmitted: "2025-10-03",
-    status: "Refunded",
-    refundedOn: "2025-10-05",
-    payoutInfoId: "PYT-9021",
-  },
-];
+/* ===== COPIED BACKEND DATE-RANGE LOGIC (from your FIRST CODE) ===== */
+function computeRange(key) {
+  const startToday = dayjs().startOf("day");
+  switch (key) {
+    case "today":
+      return { start: startToday.toISOString(), end: startToday.add(1, "day").toISOString() };
+    case "yesterday":
+      return { start: startToday.subtract(1, "day").toISOString(), end: startToday.toISOString() };
+    case "7":
+      return { start: startToday.subtract(7, "day").toISOString(), end: null };
+    case "30":
+      return { start: startToday.subtract(30, "day").toISOString(), end: null };
+    case "this_month":
+      return {
+        start: dayjs().startOf("month").toISOString(),
+        end: dayjs().endOf("month").add(1, "millisecond").toISOString(),
+      };
+    case "last_month":
+      return {
+        start: dayjs().subtract(1, "month").startOf("month").toISOString(),
+        end: dayjs().subtract(1, "month").endOf("month").add(1, "millisecond").toISOString(),
+      };
+    case "all":
+    default:
+      if (typeof key === "string" && key.includes("T")) return { start: key, end: null };
+      return { start: null, end: null };
+  }
+}
+/* ================================================================ */
 
-export default function ComplaintTable({ selectedOption }) {
+export default function ComplaintTable({ selectedOption, date = "all" }) {
   const [selected, setSelected] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -88,26 +149,109 @@ export default function ComplaintTable({ selectedOption }) {
   const [isRefundOpen, setIsRefundOpen] = useState(false);
   const [refundImageFile, setRefundImageFile] = useState(null);
   const [refundImagePreview, setRefundImagePreview] = useState(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [isConfirming, setIsConfirming] = useState(false);
   const fileInputRef = useRef(null);
 
-  const filtered = useMemo(() => {
-    if (!selectedOption || selectedOption === "All") return rows;
-    return rows.filter(
-      (r) => r.status.toLowerCase() === selectedOption.toLowerCase()
-    );
+  // 🔹 Reject modal (UI-only)
+  const [isRejectOpen, setIsRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  // 🔄 Data from RPC
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Map RPC row → UI shape
+  const mapRpcToUi = (r) => {
+    const d = r.details || {};
+    const os = d.order_summary || {};
+    return {
+      refundId: r.refund_id,
+      customerName: r.customer_name ?? "—",
+      orderId: r.order_id,
+
+      // For Pending/Approved we keep original reason
+      reason: r.reason ?? "—",
+
+      // 👇 NEW: reason for rejected
+      reasonRejected: r.reason_rejected ?? d.reason_rejected ?? null,
+
+      // raw ISO dates for backend filtering (unformatted)
+      dateSubmittedISO: r.date_submitted ?? null,
+      refundedOnISO: r.resolved_at ?? d.resolved_at ?? null,
+      rejectedAtISO: r.rejected_at ?? d.rejected_at ?? null,
+
+      // formatted dates for display
+      dateSubmitted: fmtPHDate(r.date_submitted),
+      status: r.status ?? "—",
+      rejectedAt: fmtPHDate(r.rejected_at ?? d.rejected_at ?? null),
+      refundedOn: fmtPHDate(r.resolved_at ?? d.resolved_at ?? null),
+
+      // Prefer direct proof_image_url if your view projects it, else details.image_proof_url
+      imageProof: r.proof_image_url ?? d.image_proof_url ?? null,
+
+      totalAmountPaid: Number(os.total_order ?? 0),
+      quantityOrdered: Number(d.quantity_ordered_trays ?? 0),
+      deliveryFee: Number(os.delivery_fee ?? 0),
+      serviceFee: Number(os.service_fee ?? 0),
+      modeOfPayment: d.mode_of_payment ?? "—",
+      gcashName: d.gcash_name ?? null,
+      gcashNumber: d.gcash_number ?? null,
+      payoutInfoId: d.payout_info_id ?? null,
+
+      // 👇 NEW: refunded amount coming from your RPC/view (details or top-level)
+      refundedAmount:
+        r.refunded_amount != null
+          ? Number(r.refunded_amount)
+          : d.refunded_amount != null
+          ? Number(d.refunded_amount)
+          : null,
+    };
+  };
+
+  // Fetch data on mount + when selectedOption changes
+  const reload = useCallback(async () => {
+    const pStatus =
+      selectedOption && selectedOption.toLowerCase() !== "all"
+        ? selectedOption
+        : null;
+
+    const data = await viewRefundOverviewAdmin({ status: pStatus });
+    setRows((data || []).map(mapRpcToUi));
+    setSelected(Array((data || []).length).fill(false));
+    setSelectAll(false);
   }, [selectedOption]);
 
   useEffect(() => {
-    setSelected(Array(filtered.length).fill(false));
-    setSelectAll(false);
-  }, [filtered.length]);
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        await reload();
+      } catch (e) {
+        if (!cancelled) setError(e?.message || "Failed to load refunds");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reload]);
 
-  const viewDetails = (item) => {
-    setModalData(item);
-    setIsModalOpen(true);
-  };
+  // Tabs
+  const isPendingTab =
+    (selectedOption || "").toLowerCase() === "pending" ||
+    (selectedOption || "").toLowerCase() === "in review";
+  const isApprovedTab = (selectedOption || "").toLowerCase() === "approved";
+  const isRefundedTab = (selectedOption || "").toLowerCase() === "refunded";
+  const isRejectedTab = (selectedOption || "").toLowerCase() === "rejected"; // 👈 NEW
 
-  const headersInReview = [
+  // headers
+  const headersWithSubmitted = [
     "Refund ID",
     "Customer Name",
     "Order ID",
@@ -115,20 +259,9 @@ export default function ComplaintTable({ selectedOption }) {
     "Date Submitted",
     "Status",
     "Action",
-    <input
-      key="selectAll"
-      type="checkbox"
-      checked={selectAll}
-      className="accent-primaryYellow focus:ring-2 focus:ring-black"
-      onChange={(e) => {
-        const isChecked = e.target.checked;
-        setSelectAll(isChecked);
-        setSelected(Array(filtered.length).fill(isChecked));
-      }}
-    />,
   ];
 
-  const headersRefunded = [
+  const headersWithRefundedOn = [
     "Refund ID",
     "Customer Name",
     "Order ID",
@@ -136,21 +269,24 @@ export default function ComplaintTable({ selectedOption }) {
     "Refunded On",
     "Status",
     "Action",
-    <input
-      key="selectAll"
-      type="checkbox"
-      checked={selectAll}
-      className="accent-primaryYellow focus:ring-2 focus:ring-black"
-      onChange={(e) => {
-        const isChecked = e.target.checked;
-        setSelectAll(isChecked);
-        setSelected(Array(filtered.length).fill(isChecked));
-      }}
-    />,
+  ];
+
+  const headersWithRejectedAt = [
+    "Refund ID",
+    "Customer Name",
+    "Order ID",
+    "Reason",
+    "Rejected At",
+    "Status",
+    "Action",
   ];
 
   const headers =
-    selectedOption === "Refunded" ? headersRefunded : headersInReview;
+    isApprovedTab || isRefundedTab
+      ? headersWithRefundedOn
+      : isRejectedTab
+      ? headersWithRejectedAt
+      : headersWithSubmitted;
 
   const handleCheckboxChange = (index) => {
     const updated = [...selected];
@@ -159,26 +295,58 @@ export default function ComplaintTable({ selectedOption }) {
     setSelectAll(updated.every(Boolean));
   };
 
-  // Selected rows
+  // base status filter (unchanged)
+  const baseFiltered = useMemo(() => {
+    if (!selectedOption || selectedOption === "All") return rows;
+    return rows.filter(
+      (r) => (r.status || "").toLowerCase() === selectedOption.toLowerCase()
+    );
+  }, [rows, selectedOption]);
+
+  // ===== DATE FILTER (uses computeRange from FIRST CODE) =====
+  const dateFiltered = useMemo(() => {
+    const { start, end } = computeRange(date);
+    if (!start && !end) return baseFiltered;
+
+    const startTs = start ? new Date(start).getTime() : null;
+    const endTs = end ? new Date(end).getTime() : null;
+
+    // pick which date column to use based on tab
+    const pickISO = (r) => {
+      if (isApprovedTab || isRefundedTab) return r.refundedOnISO;
+      if (isRejectedTab) return r.rejectedAtISO;
+      return r.dateSubmittedISO;
+    };
+
+    return baseFiltered.filter((r) => {
+      const iso = pickISO(r);
+      if (!iso) return false;
+      const t = new Date(iso).getTime();
+      if (isNaN(t)) return false;
+      if (startTs && t < startTs) return false;
+      if (endTs && t >= endTs) return false;
+      return true;
+    });
+  }, [baseFiltered, date, isApprovedTab, isRefundedTab, isRejectedTab]);
+
+  useEffect(() => {
+    setSelected(Array(dateFiltered.length).fill(false));
+    setSelectAll(false);
+  }, [dateFiltered.length]);
+
   const selectedItems = useMemo(
-    () => filtered.filter((_, i) => selected[i]),
-    [filtered, selected]
+    () => dateFiltered.filter((_, i) => selected[i]),
+    [dateFiltered, selected]
   );
 
-  // Open refund modal from parent button
-  useEffect(() => {
-    const handler = () => {
-      if (!selectedItems.length) {
-        alert("Please select at least one complaint before refunding.");
-        return;
-      }
-      setIsRefundOpen(true);
-    };
-    window.addEventListener("openRefundModal", handler);
-    return () => window.removeEventListener("openRefundModal", handler);
-  }, [selectedItems]);
+  const showSelectionColumn = isPendingTab;
 
-  // File picker
+  const viewDetails = (item) => {
+    setModalData(item);
+    setIsModalOpen(true);
+  };
+
+  // ---- Refund modal handlers ----
   const onPickRefundImage = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -193,18 +361,101 @@ export default function ComplaintTable({ selectedOption }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  // Confirm refund (stub only)
-  const confirmRefund = useCallback(() => {
-    console.log("Refunding items:", selectedItems.map((s) => s.refundId));
-    console.log("Attached image file:", refundImageFile);
-    setIsRefundOpen(false);
-    clearRefundImage();
-  }, [selectedItems, refundImageFile, clearRefundImage]);
+  const confirmRefund = useCallback(async () => {
+    if (!refundImageFile || !refundImagePreview) return;
+
+    const amountNum = parseFloat(refundAmount || "0");
+    if (!(amountNum > 0)) return;
+
+    // Process selected items or the currently viewed item
+    const items = selectedItems.length ? selectedItems : (modalData ? [modalData] : []);
+
+    setIsConfirming(true);
+    try {
+      for (const item of items) {
+        // 1) Upload to Storage
+        const publicUrl = await uploadImageFromUrl(item.refundId, {
+          uri: refundImagePreview,                 // blob URL from preview
+          type: refundImageFile?.type ?? null,
+          fileName: refundImageFile?.name ?? null,
+        });
+
+        // 2) Call approve_refund RPC
+        await approveRefundAdmin({
+          refundId: item.refundId,
+          proofImgUrl: publicUrl,                  // saved to refund_req.proof_img_url
+          gcashName: item.gcashName ?? null,       // optional (server upserts if present)
+          gcashNumber: item.gcashNumber ?? null,   // optional
+          amount: amountNum,                       // or null to let server resolve
+        });
+      }
+
+      // 3) Reset UI + reload list
+      setIsRefundOpen(false);
+      clearRefundImage();
+      setRefundAmount("");
+      await reload();
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || "Failed to approve refund.");
+    } finally {
+      setIsConfirming(false);
+    }
+  }, [
+    refundImageFile,
+    refundImagePreview,
+    refundAmount,
+    selectedItems,
+    modalData,
+    clearRefundImage,
+    reload,
+  ]);
+
+  const canConfirmRefund =
+    !!refundImageFile && !!refundAmount && parseFloat(refundAmount) > 0 && !isConfirming;
+
+  // ===== Listen for Approve/Reject triggers BUT ONLY OPEN IF A CHECKBOX IS SELECTED =====
+  useEffect(() => {
+    const handleOpenRefund = () => {
+      if (selectedItems.length === 0) return; // ❗ Guard: require at least one checkbox
+      setIsRefundOpen(true);
+    };
+    const handleOpenReject = () => {
+      if (selectedItems.length === 0) return; // ❗ Guard: require at least one checkbox
+      setIsRejectOpen(true);
+    };
+
+    window.addEventListener("openRefundModal", handleOpenRefund);
+    window.addEventListener("openRejectModal", handleOpenReject);
+    return () => {
+      window.removeEventListener("openRefundModal", handleOpenRefund);
+      window.removeEventListener("openRejectModal", handleOpenReject);
+    };
+  }, [selectedItems.length]); // rebind when selection changes
+
+  // ========== Reject modal handlers (UI-only; NO RPC) ==========
+  const confirmReject = useCallback(async () => {
+    const reason = (rejectReason || "").trim();
+    if (!reason) return;
+
+    setIsRejecting(true);
+    try {
+      await new Promise((r) => setTimeout(r, 250));
+      setIsRejectOpen(false);
+      setRejectReason("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsRejecting(false);
+    }
+  }, [rejectReason]);
+
+  const canConfirmReject = !!(rejectReason && rejectReason.trim().length > 0) && !isRejecting;
 
   return (
     <>
-      <Table headers={headers}>
-        {filtered.map((item, index) => (
+      <Table headers={showSelectionColumn ? [...headers, ""] : headers}>
+        {dateFiltered.map((item, index) => (
           <tr
             key={item.refundId}
             className="bg-yellow-100 text-gray-700 rounded-lg shadow-sm transition"
@@ -212,17 +463,32 @@ export default function ComplaintTable({ selectedOption }) {
             <td className="px-4 py-3 text-center font-medium">{item.refundId}</td>
             <td className="px-4 py-3 text-center">{item.customerName}</td>
             <td className="px-4 py-3 text-center">{item.orderId}</td>
-            <td className="px-4 py-3 text-center">{item.reason}</td>
 
-            {selectedOption === "Refunded" ? (
-              <td className="px-4 py-3 text-center">{item.refundedOn ?? "—"}</td>
+            {/* 👇 For Rejected tab, show reason_rejected; else show reason */}
+            <td className="px-4 py-3 text-center">
+              {isRejectedTab ? (item.reasonRejected ?? "—") : item.reason}
+            </td>
+
+            {/* Date column switches per tab */}
+            {isApprovedTab || isRefundedTab ? (
+              <td className="px-4 py-3 text-center">
+                {item.refundedOn ?? "—"}
+              </td>
+            ) : isRejectedTab ? (
+              <td className="px-4 py-3 text-center">
+                {item.rejectedAt ?? "—"}
+              </td>
             ) : (
-              <td className="px-4 py-3 text-center">{item.dateSubmitted ?? "—"}</td>
+              <td className="px-4 py-3 text-center">
+                {item.dateSubmitted ?? "—"}
+              </td>
             )}
 
             <td
               className={`px-4 py-3 text-center font-medium ${
                 item.status === "In Review"
+                  ? "text-yellow-500"
+                  : item.status === "Pending"
                   ? "text-gray-500"
                   : item.status === "Refunded"
                   ? "text-gray-500"
@@ -240,18 +506,22 @@ export default function ComplaintTable({ selectedOption }) {
               <FaCircleInfo />
             </td>
 
-            <td className="px-4 py-3 text-center">
-              <input
-                type="checkbox"
-                className="accent-primaryYellow focus:ring-2 focus:ring-black"
-                checked={selected[index] || false}
-                onChange={() => handleCheckboxChange(index)}
-              />
-            </td>
+            {showSelectionColumn && (
+              <td className="px-4 py-3 text-center">
+                {String(item.status).toLowerCase() === "approved" ? null : (
+                  <input
+                    type="checkbox"
+                    className="accent-primaryYellow focus:ring-2 focus:ring-black"
+                    checked={selected[index] || false}
+                    onChange={() => handleCheckboxChange(index)}
+                  />
+                )}
+              </td>
+            )}
           </tr>
         ))}
 
-        {/* EXISTING: Details modal (unchanged) */}
+        {/* Refund Details modal */}
         <Modal
           isOpen={isModalOpen}
           onRequestClose={() => setIsModalOpen(false)}
@@ -262,7 +532,9 @@ export default function ComplaintTable({ selectedOption }) {
             <div className="flex flex-col gap-4 p-6">
               <div className="flex flex-row justify-between items-center">
                 <div className="flex flex-col">
-                  <h1 className="text-2xl font-bold text-primaryYellow">Refund Details</h1>
+                  <h1 className="text-2xl font-bold text-primaryYellow">
+                    Refund Details
+                  </h1>
                   <p className="text-lg text-gray-400 font-bold">
                     Refund ID: {modalData.refundId}
                   </p>
@@ -271,7 +543,11 @@ export default function ComplaintTable({ selectedOption }) {
                   <h1 className="text-lg text-gray-400 font-bold">Current Status:</h1>
                   <p
                     className={`text-2xl font-bold ${
-                      modalData.status === "In Review" ? "text-gray-500" : "text-primaryYellow"
+                      modalData.status === "In Review"
+                        ? "text-yellow-500"
+                        : modalData.status === "Pending"
+                        ? "text-gray-500"
+                        : "text-primaryYellow"
                     }`}
                   >
                     {modalData.status}
@@ -308,8 +584,12 @@ export default function ComplaintTable({ selectedOption }) {
                   </div>
 
                   <div>
-                    <p className="font-bold text-primaryYellow">Reason</p>
-                    <p className="text-gray-500 font-bold">{modalData.reason}</p>
+                    <p className="font-bold text-primaryYellow">
+                      {isRejectedTab ? "Reason (Rejected)" : "Reason"}
+                    </p>
+                    <p className="text-gray-500 font-bold">
+                      {isRejectedTab ? (modalData.reasonRejected ?? "—") : modalData.reason}
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-8">
@@ -325,19 +605,21 @@ export default function ComplaintTable({ selectedOption }) {
                     </div>
                   </div>
 
-                  {/* GCash Fields (used here for PayPal refund details) */}
-                  {modalData.modeOfPayment === "PayPal" && (
-                    <div className="grid grid-cols-2 gap-8">
-                      <div>
-                        <p className="font-bold text-primaryYellow">GCash Name</p>
-                        <p className="text-gray-500 font-bold">{modalData.gcashName ?? "N/A"}</p>
-                      </div>
-                      <div>
-                        <p className="font-bold text-primaryYellow">GCash Number</p>
-                        <p className="text-gray-500 font-bold">{modalData.gcashNumber ?? "N/A"}</p>
-                      </div>
+                  {/* Always show GCash fields */}
+                  <div className="grid grid-cols-2 gap-8">
+                    <div>
+                      <p className="font-bold text-primaryYellow">GCash Name</p>
+                      <p className="text-gray-500 font-bold">
+                        {modalData.gcashName ?? "N/A"}
+                      </p>
                     </div>
-                  )}
+                    <div>
+                      <p className="font-bold text-primaryYellow">GCash Number</p>
+                      <p className="text-gray-500 font-bold">
+                        {modalData.gcashNumber ?? "N/A"}
+                      </p>
+                    </div>
+                  </div>
 
                   {/* Order Summary */}
                   <div className="border-t pt-4 mt-2">
@@ -347,31 +629,45 @@ export default function ComplaintTable({ selectedOption }) {
                       <span>
                         ₱
                         {(
-                          modalData.totalAmountPaid -
-                          modalData.deliveryFee -
-                          modalData.serviceFee
+                          (modalData.totalAmountPaid ?? 0) -
+                          (modalData.deliveryFee ?? 0) -
+                          (modalData.serviceFee ?? 0)
                         ).toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between text-gray-500 font-bold">
                       <span>Delivery Fee</span>
-                      <span>₱{modalData.deliveryFee.toFixed(2)}</span>
+                      <span>₱{Number(modalData.deliveryFee ?? 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-gray-500 font-bold">
                       <span>Service Fee</span>
-                      <span>₱{modalData.serviceFee.toFixed(2)}</span>
+                      <span>₱{Number(modalData.serviceFee ?? 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-gray-700 font-extrabold mt-2">
                       <span>Total Order</span>
-                      <span>₱{modalData.totalAmountPaid.toFixed(2)}</span>
+                      <span>₱{Number(modalData.totalAmountPaid ?? 0).toFixed(2)}</span>
                     </div>
 
+                    {/* ℹ️ Note */}
                     <div className="flex items-center gap-2 bg-yellow-50 mt-4 rounded-md p-3">
                       <IoInformationCircleOutline className="text-gray-600 text-xl" />
                       <p className="text-gray-600 text-sm font-semibold">
                         Service fee is not included in refund amount.
                       </p>
                     </div>
+
+                    {/* ✅ NEW: Refunded Amount (appears for Approved/Refunded) */}
+                    {(String(modalData.status).toLowerCase() === "approved" ||
+                      String(modalData.status).toLowerCase() === "refunded") && (
+                      <div className="flex justify-between text-gray-900 font-extrabold mt-4 border-t pt-3">
+                        <span>Refunded Amount</span>
+                        <span>
+                          {modalData.refundedAmount != null
+                            ? `₱${Number(modalData.refundedAmount).toFixed(2)}`
+                            : "—"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -388,14 +684,17 @@ export default function ComplaintTable({ selectedOption }) {
           )}
         </Modal>
 
-        {/* REFUND MODAL — simplified: upload + actions only */}
+        {/* REFUND MODAL */}
         <Modal
           isOpen={isRefundOpen}
-          onRequestClose={() => setIsRefundOpen(false)}
+          onRequestClose={() => {
+            setIsRefundOpen(false);
+            clearRefundImage();
+            setRefundAmount("");
+          }}
           contentLabel="Process Refund"
           style={refundModalStyle}
         >
-          {/* Header */}
           <div className="px-6 py-5" style={{ backgroundColor: "#fec718" }}>
             <div className="flex items-center justify-between">
               <div>
@@ -403,21 +702,42 @@ export default function ComplaintTable({ selectedOption }) {
                 <p className="text-sm text-gray-800/80 mt-1">Attach a single image as proof.</p>
               </div>
               <button
-                onClick={() => setIsRefundOpen(false)}
+                onClick={() => {
+                  setIsRefundOpen(false);
+                  clearRefundImage();
+                  setRefundAmount("");
+                }}
                 className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-gray-800 shadow"
               >
                 X
               </button>
-            </div> 
+            </div>
           </div>
 
-          {/* Body: Upload only */}
           <div className="p-6">
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Refund Amount (₱) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-xl border border-gray-300 px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+              />
+              <p className="mt-2 text-xs text-gray-500 font-semibold">
+                Service fee is not included in the refund amount.
+              </p>
+            </div>
+
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Image Proof (required)
             </label>
 
-            {/* Click-to-upload area: only triggers when no image yet */}
             <div
               onClick={() => {
                 if (!refundImagePreview) fileInputRef.current?.click();
@@ -436,7 +756,6 @@ export default function ComplaintTable({ selectedOption }) {
                 <div className="text-xs text-gray-500 mt-1">JPG, PNG</div>
               </div>
 
-              {/* Hidden input (no overlay) */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -446,7 +765,6 @@ export default function ComplaintTable({ selectedOption }) {
                 aria-label="Attach refund proof image"
               />
 
-              {/* Preview */}
               {refundImagePreview && (
                 <div className="mt-4 w-full">
                   <div className="rounded-xl border bg-white p-3 shadow-sm">
@@ -463,7 +781,7 @@ export default function ComplaintTable({ selectedOption }) {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            fileInputRef.current?.click(); // change image
+                            fileInputRef.current?.click();
                           }}
                           className="text-xs font-semibold text-gray-700"
                         >
@@ -485,27 +803,106 @@ export default function ComplaintTable({ selectedOption }) {
               )}
             </div>
 
-            {/* Footer actions — sticky so always visible */}
             <div className="mt-6 flex items-center justify-end gap-3 sticky bottom-0 bg-white py-4 px-0">
               <button
                 onClick={() => {
                   setIsRefundOpen(false);
                   clearRefundImage();
+                  setRefundAmount("");
                 }}
                 className="px-5 py-2 rounded-xl bg-gray-200 text-gray-800 font-semibold"
+                disabled={isConfirming}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmRefund}
-                disabled={!refundImageFile}
+                disabled={!canConfirmRefund}
                 className="px-5 py-2 rounded-xl text-white font-semibold shadow"
                 style={{
-                  backgroundColor: refundImageFile ? "#fec718" : "#fde68a",
-                  cursor: refundImageFile ? "pointer" : "not-allowed",
+                  backgroundColor: canConfirmRefund ? "#fec718" : "#fde68a",
+                  cursor: canConfirmRefund ? "pointer" : "not-allowed",
+                  opacity: isConfirming ? 0.8 : 1,
                 }}
               >
-                Confirm Refund
+                {isConfirming ? "Processing..." : "Confirm Refund"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* REJECT MODAL — UI ONLY */}
+        <Modal
+          isOpen={isRejectOpen}
+          onRequestClose={() => {
+            setIsRejectOpen(false);
+            setRejectReason("");
+          }}
+          contentLabel="Reject Refund"
+          style={refundModalStyle}
+        >
+          {/* Header */}
+          <div className="px-6 py-5" style={{ backgroundColor: "#fec718" }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-extrabold text-gray-900">Reject Refund</h1>
+                <p className="text-sm text-gray-800/80 mt-1">
+                  Provide a reason why this refund is canceled.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsRejectOpen(false);
+                  setRejectReason("")
+                }}
+                className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-gray-800 shadow"
+              >
+                X
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="p-6">
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Reason for Rejection <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={4}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Describe why this refund is rejected..."
+                className="w-full rounded-xl border border-gray-300 px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+              />
+              <p className="mt-2 text-xs text-gray-500 font-semibold">
+                This reason will be saved with the refund record.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="mt-6 flex items-center justify-end gap-3 sticky bottom-0 bg-white py-4 px-0">
+              <button
+                onClick={() => {
+                  setIsRejectOpen(false);
+                  setRejectReason("");
+                }}
+                className="px-5 py-2 rounded-xl bg-gray-200 text-gray-800 font-semibold"
+                disabled={isRejecting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReject}
+                disabled={!canConfirmReject}
+                className="px-5 py-2 rounded-xl text-white font-semibold shadow"
+                style={{
+                  backgroundColor: canConfirmReject ? "#fec718" : "#fde68a",
+                  cursor: canConfirmReject ? "pointer" : "not-allowed",
+                  opacity: isRejecting ? 0.8 : 1,
+                }}
+              >
+                {isRejecting ? "Rejecting..." : "Confirm Reject"}
               </button>
             </div>
           </div>
@@ -514,265 +911,3 @@ export default function ComplaintTable({ selectedOption }) {
     </>
   );
 }
-
-
-
-// import React, { useState } from "react";
-// import Table from "../../Table";
-// import { FaCircleInfo } from "react-icons/fa6";
-// import Modal from "react-modal";
-
-// const modalStyle = {
-//   content: {
-//     top: "50%",
-//     left: "50%",
-//     right: "auto",
-//     bottom: "auto",
-//     transform: "translate(-50%, -50%)",
-//     borderRadius: 20,
-//     padding: 10,
-//     maxHeight: "100vh",
-//     width: "50vw",
-//     overflow: "visible",
-//   },
-//   overlay: {
-//     backgroundColor: "rgba(0, 0, 0, 0.8)",
-//     zIndex: 1000,
-//   },
-// };
-
-// const complaints = [
-//   {
-//     orderID: "001",
-//     complainant: "Maria Lopez",
-//     against: "Juan Dela Cruz",
-//     phoneNumber: "09421323232",
-//     type: `Product Quality`,
-//     message: `The eggs were damaged`,
-//     paymentMethod: "Paypal",
-//     status: `In Review`,
-//     address: "Z2-089 Tiago Lasang Tanaok City Cebu",
-//   },
-//   {
-//     orderID: "002",
-//     complainant: "Justin Bieber",
-//     against: "Juan Dela Cruz",
-//     type: `Product Quality`,
-//     phoneNumber: "09421323232",
-//     message: `The eggs were damaged`,
-//     paymentMethod: "Paypal",
-//     status: `Resolved`,
-//     address: "Z2-089 Tiago Lasang Tanaok City Cebu",
-//   },
-//   {
-//     orderID: "003",
-//     complainant: "Maria Lopez",
-//     against: "Juan Dela Cruz",
-//     type: `Product Quality`,
-//     phoneNumber: "09421323232",
-//     message: `The eggs were damaged`,
-//     paymentMethod: "Paypal",
-//     status: `In Review`,
-//     address: "Z2-089 Tiago Lasang Tanaok City Cebu",
-//   },
-//   {
-//     orderID: "004",
-//     complainant: "Maria Lopez",
-//     against: "Juan Dela Cruz",
-//     type: `Product Quality`,
-//     phoneNumber: "09421323232",
-//     message: `The eggs were damaged`,
-//     paymentMethod: "Paypal",
-//     status: `Resolved`,
-//     address: "Z2-089 Tiago Lasang Tanaok City Cebu",
-//   },
-//   {
-//     orderID: "005",
-//     complainant: "Maria Lopez",
-//     against: "Juan Dela Cruz",
-//     type: `Product Quality`,
-//     phoneNumber: "09421323232",
-//     message: `The eggs were damaged`,
-//     paymentMethod: "Paypal",
-//     status: `Refunded`,
-//     address: "Z2-089 Tiago Lasang Tanaok City Cebu",
-//   },
-// ];
-
-// export default function ComplaintTable({ selectedOption }) {
-//   const [selected, setSelected] = useState([]);
-//   const [selectAll, setSelectAll] = useState(false);
-//   const [isModalOpen, setIsModalOpen] = useState(false);
-//   const [modalData, setModalData] = useState();
-
-//   const filteredComplaints =
-//     selectedOption && selectedOption !== "All"
-//       ? complaints.filter(
-//           (c) => c.status.toLowerCase() === selectedOption.toLowerCase()
-//         )
-//       : complaints;
-
-//   const viewOrderDetails = (item) => {
-//     setIsModalOpen(!isModalOpen);
-//     if (item) setModalData(item);
-//   };
-
-//   const headers = [
-//     "Order ID",
-//     "Complainant",
-//     "Complaint Against",
-//     "Type",
-//     "Status",
-//     "View Details",
-//     <input
-//       key="selectAll"
-//       type="checkbox"
-//       checked={selectAll}
-//       className="accent-primaryYellow focus:ring-2 focus:ring-black"
-//       onChange={(e) => {
-//         const isChecked = e.target.checked;
-//         setSelectAll(isChecked);
-//         setSelected(Array(filteredComplaints.length).fill(isChecked));
-//       }}
-//     />,
-//   ];
-
-//   const handleCheckboxChange = (index) => {
-//     const updated = [...selected];
-//     updated[index] = !updated[index];
-//     setSelected(updated);
-
-//     setSelectAll(updated.every(Boolean));
-//   };
-
-//   return (
-//     <Table headers={headers}>
-//       {filteredComplaints.map((item, index) => (
-//         <tr
-//           key={index}
-//           className="bg-yellow-100 text-gray-700 rounded-lg shadow-sm transition"
-//         >
-//           <td className="px-4 py-3 text-center font-medium">{item.orderID}</td>
-//           <td className="px-4 py-3 text-center">{item.complainant}</td>
-//           <td className="px-4 py-3 text-center">{item.against}</td>
-//           <td className="px-4 py-3 text-center">{item.type}</td>
-//           <td
-//             className={`px-4 py-3 text-center font-medium
-//               ${item.status === "Resolved" ? "text-green-600" : ""}
-//               ${item.status === "In Review" ? "text-yellow-500" : ""}
-//               ${item.status === "Refunded" ? "text-red-500" : ""}`}
-//           >
-//             {item.status}
-//           </td>
-//           <td onClick={() => viewOrderDetails(item)} className=" cursor-pointer px-4 py-3 flex items-center justify-center text-gray-400">
-//             <FaCircleInfo />
-//           </td>
-//           <td className="px-4 py-3 text-center">
-//             <input
-//               type="checkbox"
-//               className="accent-primaryYellow focus:ring-2 focus:ring-black"
-//               checked={selected[index] || false}
-//               onChange={() => handleCheckboxChange(index)}
-//             />
-//           </td>
-//         </tr>
-//       ))}
-//       <Modal
-//         isOpen={isModalOpen}
-//         onRequestClose={() => {
-//           setIsModalOpen(!isModalOpen);
-//         }}
-//         contentLabel="Order Details"
-//         style={modalStyle}
-//       >
-//         {modalData && (
-//           <div className="flex flex-col gap-5 p-10">
-//             <div className="flex flex-row items-center justify-between">
-//               <div className="flex flex-col leading-tight">
-//                 <h1 className="text-2xl font-bold text-primaryYellow">
-//                   Complaint Details
-//                 </h1>
-//                 <p className="text-lg text-gray-400 font-bold">
-//                   Order #: {modalData.orderID}
-//                 </p>
-//               </div>
-//               <div className="flex flex-col leading-tight items-end">
-//                 <h1 className="text-lg text-gray-400 font-bold">
-//                   Current Status:
-//                 </h1>
-//                 <p className="text-2xl font-bold text-primaryYellow">
-//                   {modalData.status}
-//                 </p>
-//               </div>
-//             </div>
-//             <div className="flex flex-col leading-tight">
-//               <h1 className="flex items-center gap-3 font-bold text-lg text-gray-700">
-//                 {modalData.complainant}{" "}
-//                 <span className="text-gray-400">{modalData.phoneNumber}</span>{" "}
-//               </h1>
-//               <h2 className="flex items-center gap-3 font-bold text-lg text-gray-700">
-//                 {modalData.address}
-//               </h2>
-//               <h2 className="flex items-center gap-3 font-bold text-lg text-gray-700">
-//                 Payment Method: {modalData.paymentMethod}
-//               </h2>
-//             </div>
-//             <div className="flex flex-row gap-5">
-//               {/* Item summary */}
-//               <div className="border-2 p-5 rounded-lg w-full flex flex-col justify-center gap-15">
-//                 <div className="flex flex-col gap-3">
-//                     <div className="flex flex-col leading-tight">
-//                       <p className="font-bold text-gray-400">Complaint Type:</p>
-//                       <p className="text-primaryYellow text-lg font-bold">{modalData.type}</p>
-//                     </div>
-//                 </div>
-//                 <div className="flex flex-col gap-3">
-//                     <div className="flex flex-col leading-tight">
-//                       <p className="font-bold text-gray-400">Message:</p>
-//                       <p className="text-primaryYellow text-lg font-bold">{modalData.message}</p>
-//                     </div>
-//                 </div>
-//               </div>
-//               {/* Order Summary */}
-//               <div className="border-2 p-5 rounded-lg w-full">
-//                 <div className="flex flex-col gap-1">
-//                   <h1 className="text-xl text-primaryYellow font-bold mb-3">
-//                     Order Summary
-//                   </h1>
-//                   <div className="flex flex-row justify-between items-center text-gray-400 font-bold text-lg">
-//                     <p>Subtotal</p>
-//                     <p>₱808.00</p>
-//                   </div>
-//                   <div className="flex flex-row justify-between items-center text-gray-400 font-bold text-lg">
-//                     <p>Delivery Fee</p>
-//                     <p>₱808.00</p>
-//                   </div>
-//                   <div className="flex flex-row justify-between items-center text-gray-400 font-bold text-lg">
-//                     <p>Shipping Discount</p>
-//                     <p>₱808.00</p>
-//                   </div>
-//                   <div className="flex flex-row justify-between items-center text-gray-400 font-bold text-lg">
-//                     <p>Product Discount</p>
-//                     <p>₱808.00</p>
-//                   </div>
-//                   <div className="flex flex-row justify-between items-center font-bold text-lg">
-//                     <p>Total Order</p>
-//                     <p>₱808.00</p>
-//                   </div>
-//                 </div>
-//               </div>
-//             </div>
-//             <div className="flex items-center justify-center">
-//               <button
-//                 onClick={() => setIsModalOpen(!isModalOpen)}
-//                 className="cursor-pointer bg-primaryYellow text-white font-bold text-lg rounded-lg px-30 py-3"
-//               >
-//                 Back
-//               </button>
-//             </div>
-//           </div>
-//         )}
-//       </Modal>
-//     </Table>
-//   );
-// }
