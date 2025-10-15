@@ -107,7 +107,7 @@ export default function DashboardLayout() {
     "/admin/expenses/feed-monitoring": "Feed Monitoring",
     "/admin/order-status": "Order Status",
     "/admin/messages": "Messages",
-    "/admin/complaints": "Complaints",
+    "/admin/complaints": "Refunds",
     "/admin/payout-request": "Payout Request",
     "/admin/reports": "Reports",
     "/admin/settings": "Account Settings",

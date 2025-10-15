@@ -107,7 +107,7 @@ export const sidebarItems = [
     roles: ["admin"],
   },
   {
-    label: "Complaints",
+    label: "Refunds",
     path: { admin: "/admin/complaints" },
     icon: IoMdMegaphone,
     roles: ["admin"],
