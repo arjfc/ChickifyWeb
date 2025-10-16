@@ -70,15 +70,46 @@ export async function fetchFeedAllocations({
   });
   if (error) throw error;
 
-  // Normalize for UI
-  return (data || []).map((r) => ({
+  return (data ?? []).map((r) => ({
     id: String(r.allocation_id),
     farmer: r.farmer_name,
     brand: r.brand,
-    type: r.feed_name, // your column header says "Feed Type" but SQL returns name
-    remainingKg: Number(r.remaining_kg ?? 0),
+    type: r.feed_name, // "Feed Type" column
+    // 🔽 Use allocation-level remaining for your "Remaining (kg)" column
+    remainingKg: Number(r.allocation_remaining_kg ?? 0),
     allocatedKg: Number(r.allocated_kg ?? 0),
+    // Optional extras if you want to show/use them later:
+    consumedKg: Number(r.consumed_kg ?? 0),
+    purchaseRemainingKg: Number(r.purchase_remaining_kg ?? 0),
     allocationDate: r.allocated_at, // DATE
   }));
 }
+
+// optional: pretty print in UI
+export const fmtKg = (n) =>
+  typeof n === "number" ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0";
+
+// export async function fetchFeedAllocations({
+//   dateFrom = null,
+//   dateTo = null,
+//   search = null,
+// } = {}) {
+//   const { data, error } = await supabase.rpc("feed_allocations_for_admin", {
+//     p_date_from: dateFrom,
+//     p_date_to: dateTo,
+//     p_search: search,
+//   });
+//   if (error) throw error;
+
+//   // Normalize for UI
+//   return (data || []).map((r) => ({
+//     id: String(r.allocation_id),
+//     farmer: r.farmer_name,
+//     brand: r.brand,
+//     type: r.feed_name, // your column header says "Feed Type" but SQL returns name
+//     remainingKg: Number(r.remaining_kg ?? 0),
+//     allocatedKg: Number(r.allocated_kg ?? 0),
+//     allocationDate: r.allocated_at, // DATE
+//   }));
+// }
 
