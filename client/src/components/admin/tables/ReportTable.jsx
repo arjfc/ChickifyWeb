@@ -1,8 +1,99 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Table from "../../Table";
+import { fetchTransactionsByAdmin } from "@/services/TransactionLogs"; 
 
-export default function ReportTable({ selectedOption }) {
-  // 🔹 Mock data for each report type
+export default function ReportTable({
+  selectedOption,
+  reportDateRange = "all",
+}) {
+  // 🔹 Local state for RPC data
+  const [txRows, setTxRows] = useState([]);        // raw rows from RPC
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+
+  // ===== Helpers =====
+  const peso = (n) =>
+    typeof n === "number"
+      ? `₱${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : "₱0.00";
+
+  // Supabase returns dates like "2025-10-02" (ISO date). Mock data might be "10/02/25".
+  const parseDate = (d) => {
+    if (!d) return null;
+    if (d instanceof Date) return d;
+    // try ISO first
+    if (/^\d{4}-\d{2}-\d{2}/.test(d)) return new Date(d + "T00:00:00");
+    // fallback: mm/dd/yy
+    const mdy = d.split("/");
+    if (mdy.length === 3) {
+      const [mm, dd, yy] = mdy.map((x) => parseInt(x, 10));
+      const fullY = yy < 100 ? 2000 + yy : yy;
+      return new Date(fullY, mm - 1, dd);
+    }
+    const t = new Date(d);
+    return isNaN(t) ? null : t;
+  };
+
+  // Get date range (inclusive) based on the dropdown value
+  const getRange = (key) => {
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    if (key === "all") return { from: null, to: null };
+
+    if (key === "today") {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      return { from: start, to: end };
+    }
+
+    if (key === "yesterday") {
+      const y = new Date(now);
+      y.setDate(now.getDate() - 1);
+      const start = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0, 0);
+      const stop = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+      return { from: start, to: stop };
+    }
+
+    if (key === "7" || key === "30") {
+      const days = parseInt(key, 10);
+      const start = new Date(now);
+      start.setDate(now.getDate() - (days - 1));
+      start.setHours(0, 0, 0, 0);
+      return { from: start, to: end };
+    }
+
+    if (key === "last_month") {
+      const firstOfThis = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastOfPrev = new Date(firstOfThis - 1);
+      const start = new Date(lastOfPrev.getFullYear(), lastOfPrev.getMonth(), 1, 0, 0, 0, 0);
+      const stop = new Date(lastOfPrev.getFullYear(), lastOfPrev.getMonth(), lastOfPrev.getDate(), 23, 59, 59, 999);
+      return { from: start, to: stop };
+    }
+
+    return { from: null, to: null };
+  };
+
+  // 🔹 Fetch RPC data when "Transaction Records" tab is active
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      if (selectedOption !== "Transaction Records") return;
+      setLoading(true);
+      setErr(null);
+      try {
+        const rows = await fetchTransactionsByAdmin(); // uses your client/usage function
+        if (!cancelled) setTxRows(Array.isArray(rows) ? rows : []);
+      } catch (e) {
+        if (!cancelled) setErr(e?.message || "Failed to load transactions");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    run();
+    return () => { cancelled = true; };
+  }, [selectedOption]);
+
+  // 🔹 Mock data for other tabs (unchanged)
   const payoutData = [
     { payoutID: "PYT-3021", sellerName: "Maria Lopez", amount: 5000, requestDate: "10/10/25", processDate: "11/1/25", status: "Pending" },
     { payoutID: "PYT-3022", sellerName: "Juan Dela Cruz", amount: 3500, requestDate: "10/11/25", processDate: "11/2/25", status: "Approved" },
@@ -11,11 +102,6 @@ export default function ReportTable({ selectedOption }) {
   const salesData = [
     { orderID: "ORD-5012", buyerName: "Ana Reyes", productName: "Fresh Eggs", variant: "Medium", quantity: 10, pricePerTray: 150, totalAmount: 1500, orderDate: "10/05/25", fulfillmentDate: "10/06/25", orderStatus: "Delivered", paymentStatus: "Paid" },
     { orderID: "ORD-5013", buyerName: "Carlo Santos", productName: "Brown Eggs", variant: "Large", quantity: 5, pricePerTray: 180, totalAmount: 900, orderDate: "10/08/25", fulfillmentDate: "10/09/25", orderStatus: "Pending", paymentStatus: "Unpaid" },
-  ];
-
-  const transactionData = [
-    { orderID: "ORD-7001", transactionDate: "10/01/25", paymentMethod: "GCash", grossAmount: 2000, platformFee: 100, netToCoop: 1900, platformEarnings: 100, memo: "Weekly payout" },
-    { orderID: "ORD-7002", transactionDate: "10/02/25", paymentMethod: "Bank Transfer", grossAmount: 3500, platformFee: 150, netToCoop: 3350, platformEarnings: 150, memo: "Commission fee" },
   ];
 
   const eggStockData = [
@@ -28,56 +114,98 @@ export default function ReportTable({ selectedOption }) {
     { productionID: "EP-002", farmerName: "Juan Dela Cruz", flockID: "FLK-11", productionDate: "10/06/25", size: "Large", totalEggs: 500, sellableEggs: 490, rejectEggs: 10, notes: "Normal", created: "10/06/25" },
   ];
 
-  // 🔹 Header definitions for each type
+  // 🔹 Headers
   const headerMap = {
     "Payout History": ["Payout ID", "Seller Name", "Amount", "Request Date", "Processed Date", "Status"],
     "Sales Records": ["Order ID", "Buyer Name", "Product Name", "Size", "Quantity Sold", "Price per tray", "Total Amount", "Order Date", "Fulfillment Date", "Order Status", "Payment Status"],
-    "Transaction Records": ["Order ID", "Transaction Date", "Payment Method", "Gross Amount", "Platform Fee", "Net To Coop", "Platform Earnings", "Memo"],
+    "Transaction Records": ["Order ID", "Transaction Date", "Payment Method", "Gross Amount", "Platform Fee", "Net To Coop", "Memo"],
     "Egg Stock": ["Batch ID", "Farmer Name", "Product ID", "Egg Quantity", "Date Collected", "Expiry Date", "Size", "Sold", "Created"],
     "Egg Production": ["Egg Production ID", "Farmer Name", "Flock ID", "Production Date", "Size", "Total Eggs", "Sellable Eggs", "Reject Eggs", "Notes", "Created"],
   };
 
-  // 🔹 Select data & headers depending on selected option
+  // 🔹 Select base data per tab (Transaction uses RPC)
   let headers = [];
-  let data = [];
+  let baseData = [];
 
   switch (selectedOption) {
     case "Payout History":
       headers = headerMap["Payout History"];
-      data = payoutData;
+      baseData = payoutData;
       break;
     case "Sales Records":
       headers = headerMap["Sales Records"];
-      data = salesData;
+      baseData = salesData;
       break;
     case "Transaction Records":
       headers = headerMap["Transaction Records"];
-      data = transactionData;
+      // Map RPC rows → table row shape
+      baseData = (txRows || []).map((r) => ({
+        orderID: r.order_code ?? `ORD-${String(r.order_id).padStart(4, "0")}`,
+        transactionDate: r.transaction_date, // keep raw string; we’ll parse for filter
+        paymentMethod: r.payment_method || "",
+        grossAmount: Number(r.gross_amount ?? 0),
+        platformFee: Number(r.platform_fee ?? 0),
+        netToCoop: Number(r.net_to_coop ?? 0),
+        memo: r.memo ?? "",
+      }));
       break;
     case "Egg Stock":
       headers = headerMap["Egg Stock"];
-      data = eggStockData;
+      baseData = eggStockData;
       break;
     case "Egg Production":
       headers = headerMap["Egg Production"];
-      data = eggProductionData;
+      baseData = eggProductionData;
       break;
     default:
       headers = [];
-      data = [];
+      baseData = [];
+  }
+
+  // 🔹 UI-only date filtering (does NOT hit DB)
+  const filteredData = useMemo(() => {
+    const { from, to } = getRange(reportDateRange);
+    if (!from && !to) return baseData;
+
+    const within = (d) => {
+      const dt = parseDate(d);
+      if (!dt) return false;
+      if (from && dt < from) return false;
+      if (to && dt > to) return false;
+      return true;
+    };
+
+    // pick the correct date field per tab
+    const picker = {
+      "Payout History": (row) => row.processDate || row.requestDate,
+      "Sales Records": (row) => row.orderDate,
+      "Transaction Records": (row) => row.transactionDate,
+      "Egg Stock": (row) => row.created || row.dateCollected,
+      "Egg Production": (row) => row.created || row.productionDate,
+    }[selectedOption];
+
+    return baseData.filter((row) => within(picker(row)));
+  }, [baseData, reportDateRange, selectedOption]);
+
+  // 🔹 Loading / error for Transaction tab
+  if (selectedOption === "Transaction Records" && loading) {
+    return <div className="text-gray-600 px-2 py-3">Loading transactions…</div>;
+  }
+  if (selectedOption === "Transaction Records" && err) {
+    return <div className="text-red-600 px-2 py-3">Error: {String(err)}</div>;
   }
 
   return (
     <div className="[&_thead_th]:text-base [&_thead_th]:py-1 [&_thead_tr]:h-9 [&_thead_th]:font-bold">
       <Table headers={headers}>
-        {data.map((item, index) => (
+        {filteredData.map((item, index) => (
           <tr key={index} className="bg-[#faf4df] text-gray-700 rounded-lg shadow-sm">
             {/* Payout History */}
             {selectedOption === "Payout History" && (
               <>
-                <td className="px-4 py-3 text-center font-medium ">{item.payoutID}</td>
+                <td className="px-4 py-3 text-center font-medium">{item.payoutID}</td>
                 <td className="px-4 py-3 text-center">{item.sellerName}</td>
-                <td className="px-4 py-3 text-center">₱{item.amount.toLocaleString()}</td>
+                <td className="px-4 py-3 text-center">{peso(item.amount)}</td>
                 <td className="px-4 py-3 text-center">{item.requestDate}</td>
                 <td className="px-4 py-3 text-center">{item.processDate}</td>
                 <td className={`px-4 py-3 text-center font-medium ${item.status === "Approved" ? "text-green-600" : item.status === "Pending" ? "text-yellow-500" : "text-red-500"}`}>{item.status}</td>
@@ -92,8 +220,8 @@ export default function ReportTable({ selectedOption }) {
                 <td className="px-4 py-3 text-center">{item.productName}</td>
                 <td className="px-4 py-3 text-center">{item.variant}</td>
                 <td className="px-4 py-3 text-center">{item.quantity}</td>
-                <td className="px-4 py-3 text-center">₱{item.pricePerTray}</td>
-                <td className="px-4 py-3 text-center">₱{item.totalAmount}</td>
+                <td className="px-4 py-3 text-center">{peso(item.pricePerTray)}</td>
+                <td className="px-4 py-3 text-center">{peso(item.totalAmount)}</td>
                 <td className="px-4 py-3 text-center">{item.orderDate}</td>
                 <td className="px-4 py-3 text-center">{item.fulfillmentDate}</td>
                 <td className={`px-4 py-3 text-center font-medium ${item.orderStatus === "Delivered" ? "text-green-600" : item.orderStatus === "Pending" ? "text-yellow-500" : "text-red-500"}`}>{item.orderStatus}</td>
@@ -101,16 +229,15 @@ export default function ReportTable({ selectedOption }) {
               </>
             )}
 
-            {/* Transaction Records */}
+            {/* Transaction Records (from RPC) */}
             {selectedOption === "Transaction Records" && (
               <>
                 <td className="px-4 py-3 text-center font-medium">{item.orderID}</td>
                 <td className="px-4 py-3 text-center">{item.transactionDate}</td>
                 <td className="px-4 py-3 text-center">{item.paymentMethod}</td>
-                <td className="px-4 py-3 text-center">₱{item.grossAmount.toLocaleString()}</td>
-                <td className="px-4 py-3 text-center">₱{item.platformFee.toLocaleString()}</td>
-                <td className="px-4 py-3 text-center">₱{item.netToCoop.toLocaleString()}</td>
-                <td className="px-4 py-3 text-center">₱{item.platformEarnings.toLocaleString()}</td>
+                <td className="px-4 py-3 text-center">{peso(item.grossAmount)}</td>
+                <td className="px-4 py-3 text-center">{peso(item.platformFee)}</td>
+                <td className="px-4 py-3 text-center">{peso(item.netToCoop)}</td>
                 <td className="px-4 py-3 text-center">{item.memo}</td>
               </>
             )}
