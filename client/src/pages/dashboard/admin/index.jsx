@@ -1,73 +1,113 @@
-import { MdKeyboardArrowRight } from "react-icons/md";
-import DashboardCard from "../../../components/DashboardCard";
-import { insights } from "../../../constants/mockData";
+// pages/admin/dashboard/index.jsx
+import React, { useEffect, useState } from "react";
 import { LuUserRound, LuPackageOpen } from "react-icons/lu";
 import { IoBarChartOutline } from "react-icons/io5";
 
-import LineChart from "../../../components/Charts/Admin/LineChart";
-import BarChart from "../../../components/Charts/Admin/BarChart";
-import DonutChart from "../../../components/Charts/Admin/DonutChart";
-import PriceForecastChart from "../../../components/Charts/Admin/PriceForecastChart";
+import DashboardCard from "@/components/DashboardCard";
+import LineChart from "@/components/Charts/Admin/LineChart";
+import BarChart from "@/components/Charts/Admin/BarChart";
+import DonutChart from "@/components/Charts/Admin/DonutChart";
+import PriceForecastChart from "@/components/Charts/Admin/PriceForecastChart";
+
+import {
+  getDashboardSummary,
+  getCustomerGrowth,
+  getSalesTimeseriesAdmin,
+  getTopProductAdmin,
+  getAdminOrderStatusBuckets,
+  getCebuSeasonalPricesLocal,
+} from "@/services/analytics";
 
 export default function AdminDashboard() {
+  const [summary, setSummary] = useState({ total_active_users: 0, total_sales_today: 0, total_egg_trays: 0 });
+  const [salesTrend, setSalesTrend] = useState([]);
+  const [topProduct, setTopProduct] = useState(null);
+  const [growth, setGrowth] = useState([]);
+  const [orderStatus, setOrderStatus] = useState({ labels: [], series: [], raw: [] });
+  const [forecast, setForecast] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await getDashboardSummary();
+        setSummary({
+          total_active_users: s.total_active_users,
+          total_sales_today: s.total_sales_today,
+          total_egg_trays: s.total_egg_trays,
+        });
+      } catch (e) {
+        console.error("[summary] error:", e);
+      }
+
+      try {
+        const ts = await getSalesTimeseriesAdmin(7);
+        setSalesTrend(ts);
+      } catch (e) {
+        console.error("[sales] error:", e);
+        setSalesTrend([]);
+      }
+
+      try {
+        const top = await getTopProductAdmin(30);
+        setTopProduct(top);
+      } catch (e) {
+        console.error("[top-product] error:", e);
+        setTopProduct(null);
+      }
+
+      try {
+        const g = await getCustomerGrowth(30);
+        setGrowth(g);
+      } catch (e) {
+        console.error("[growth] error:", e);
+        setGrowth([]);
+      }
+
+      try {
+        const donut = await getAdminOrderStatusBuckets();
+        setOrderStatus(donut);
+      } catch (e) {
+        console.error("[donut] error:", e);
+        setOrderStatus({ labels: ["pending","on_delivery","complete","cancelled"], series: [0,0,0,0], raw: [] });
+      }
+
+      const yr = new Date().getFullYear();
+      setForecast(getCebuSeasonalPricesLocal(yr, 300));
+    })();
+  }, []);
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Section 1: Dashboard Cards */}
+      {/* SUMMARY CARDS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <DashboardCard
-          title="Total Active Users"
-          icon={<LuUserRound className="text-6xl text-primaryYellow" />}
-          data={15300}
-        />
-        <DashboardCard
-          title="Total Sales Today"
-          icon={<IoBarChartOutline className="text-6xl text-primaryYellow" />}
-          data={15300}
-        />
-        <DashboardCard
-          title="Total Egg Trays"
-          icon={<LuPackageOpen className="text-6xl text-primaryYellow" />}
-          data={12345}
-        />
+        <DashboardCard title="Total Customers" icon={<LuUserRound className="text-6xl text-primaryYellow" />} data={summary.total_active_users} />
+        <DashboardCard title="Total Sales Today" icon={<IoBarChartOutline className="text-6xl text-primaryYellow" />} data={summary.total_sales_today} />
+        <DashboardCard title="Total Egg Trays" icon={<LuPackageOpen className="text-6xl text-primaryYellow" />} data={summary.total_egg_trays} />
       </div>
 
+      {/* SALES TREND */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sales Trend */}
         <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg w-full">
-          <LineChart />
+          <LineChart data={salesTrend} bestProduct={topProduct} />
         </div>
-
-        {/* Insights */}
         <div className="col-span-1 flex flex-col gap-4 p-6 rounded-lg border border-gray-200 shadow-lg h-full">
-          <div className="text-primaryYellow flex flex-col gap-2 leading-tight">
-            <h1 className="text-2xl font-bold">View Insights</h1>
-            <p className="text-gray-400">There are more to view</p>
-          </div>
-          {insights.slice(0, 3).map((data) => (
-            <div
-              className="relative bg-softPrimaryYelllow p-4 rounded-xl cursor-pointer text-xs flex items-center "
-              key={data.id}
-            >
-              {data.title}
-              <MdKeyboardArrowRight className="absolute top-3 right-3 w-8 h-8" />
-            </div>
-          ))}
+          {/* insights … */}
         </div>
       </div>
+
+      {/* CUSTOMER GROWTH + DONUT */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Customer Growth Analysis */}
         <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg w-full">
-          <BarChart />
+          <BarChart data={growth} />
         </div>
-
-        {/* Insights */}
         <div className="col-span-1 flex flex-col gap-4 p-6 rounded-lg border border-gray-200 shadow-lg h-full">
-         <DonutChart/>
+          <DonutChart data={orderStatus} />
         </div>
+      </div>
 
-         <div className="col-span-4 p-6 rounded-lg border border-gray-200 shadow-lg w-full">
-          <PriceForecastChart />
-        </div>
+      {/* PRICE FORECAST */}
+      <div className="col-span-4 p-6 rounded-lg border border-gray-200 shadow-lg w-full">
+        <PriceForecastChart data={forecast} />
       </div>
     </div>
   );

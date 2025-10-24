@@ -1,9 +1,56 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Card from "../../../components/Card";
 import { IoFilterOutline } from "react-icons/io5";
 import ProductTable from "../../../components/admin/tables/ProductTable";
 import Modal from "react-modal";
 import TrayEggImg from "../../../assets/tray-egg.png";
+
+import {
+  listCategories,
+  listSizes,
+  listMyProducts,
+  upsertProduct,
+  uploadProductImage,
+} from "@/services/Products";
+
+import { getMyUserProfile, hasProfileAddress } from "@/services/Profile";
+
+/* ---------- Small toast helper ---------- */
+function Toast({ toast, onClose }) {
+  if (!toast) return null;
+  const palette = {
+    success: "bg-green-50 border-green-300 text-green-800 shadow-green-100",
+    warning: "bg-amber-50 border-amber-300 text-amber-900 shadow-amber-100",
+    error: "bg-red-50 border-red-300 text-red-800 shadow-red-100",
+  };
+  const styles = palette[toast.type || "warning"];
+
+  return (
+    <div className="fixed top-6 right-6 z-[2000]">
+      <div
+        className={`max-w-sm w-[360px] rounded-xl border p-4 shadow-lg ${styles}`}
+        role="alert"
+      >
+        <div className="flex items-start gap-3">
+          <div className="text-xl leading-none">⚠️</div>
+          <div className="flex-1">
+            <p className="font-semibold mb-1">{toast.title}</p>
+            <p className="text-sm opacity-90 whitespace-pre-line">
+              {toast.message}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-2 px-2 py-1 rounded-md text-xs hover:bg-black/5"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const modalBaseStyle = {
   content: {
@@ -16,213 +63,493 @@ const modalBaseStyle = {
     padding: 20,
     maxHeight: "100vh",
     overflow: "visible",
+    width: "90%",
+    maxWidth: "600px",
   },
-  overlay: {
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    zIndex: 1000,
-  },
+  overlay: { backgroundColor: "rgba(0,0,0,0.8)", zIndex: 1000 },
 };
 
-const sizes = [
-  { size: "Extra Small", id: "xs", isAvailable: true },
-  { size: "Small", id: "sm", isAvailable: true },
-  { size: "Medium", id: "md", isAvailable: true },
-  { size: "Large", id: "lg", isAvailable: true },
-  { size: "Extra Large", id: "xl", isAvailable: true },
-  { size: "Jumbo", id: "xxl", isAvailable: false },
-  { size: "Super Jumbo", id: "xxxl", isAvailable: false },
-];
-
 export default function ProductDetails() {
-  const [selectedType, setSelectedType] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [btnType, setBtnType] = useState("");
-  const types = ["All", "Egg", "Itlog", "Size"];
+  const [products, setProducts] = useState([]);
+  const [current, setCurrent] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleModal = (type) => {
-    setIsModalOpen(!isModalOpen);
-    setBtnType(type);
+  const [categories, setCategories] = useState([]);
+  const [sizes, setSizes] = useState([]);
+
+  const [profile, setProfile] = useState(null);
+
+  const [form, setForm] = useState({
+    prod_id: null,
+    prod_name: "",
+    prod_description: "",
+    p_categ_id: "",
+    size_id: "",
+    prod_price_per_tray: "",
+    prod_status: "active",
+    prod_img: "",
+  });
+
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+
+  // toast state
+  const [toast, setToast] = useState(null);
+  const notify = (message, type = "warning", title = "Action needed") => {
+    setToast({ message, type, title });
+    // auto close after 4.5s
+    window.clearTimeout(notify._t);
+    notify._t = window.setTimeout(() => setToast(null), 4500);
   };
 
+  /* ---------- helpers ---------- */
+  function validateProductForm(f) {
+    const errors = [];
+    if (!f.prod_name?.trim()) errors.push("• Product name is required.");
+    if (!f.p_categ_id) errors.push("• Category is required.");
+    if (!f.size_id) errors.push("• Size is required.");
+    const price = Number(f.prod_price_per_tray);
+    if (!Number.isFinite(price) || price <= 0)
+      errors.push("• Price / Tray must be a positive number.");
+    if (!["active", "inactive"].includes(String(f.prod_status)))
+      errors.push("• Status must be active or inactive.");
+    return errors;
+  }
+
+  async function refreshProfile() {
+    try {
+      const p = await getMyUserProfile(); // uses RPC (joined to address)
+      setProfile(p);
+      return p;
+    } catch (e) {
+      console.error("profile load error:", e);
+      return null;
+    }
+  }
+
+  /* ---------- initial data ---------- */
+  useEffect(() => {
+    (async () => {
+      const [cats, sz] = await Promise.all([listCategories(), listSizes()]);
+      setCategories(cats);
+      setSizes(sz);
+    })().catch((e) => {
+      console.error("dropdown load error:", e);
+      notify(e.message || "Failed to load options", "error", "Error");
+    });
+  }, []);
+
+  useEffect(() => {
+    refreshProfile();
+  }, []);
+
+  // Re-check profile when returning from Settings tab/page
+  useEffect(() => {
+    const onVis = async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          const p = await getMyUserProfile();
+          setProfile(p);
+        } catch {}
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  /* ---------- data list ---------- */
+  async function reloadList() {
+    try {
+      setLoading(true);
+      const rows = await listMyProducts();
+      const filtered =
+        selectedCategoryId != null
+          ? rows.filter((r) => r.p_categ_id === Number(selectedCategoryId))
+          : rows;
+
+      setProducts(filtered);
+      setCurrent(filtered?.[0] ?? null);
+    } catch (e) {
+      console.error("product_list_by_owner error:", e);
+      notify(e.message || "Failed to load products", "error", "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    reloadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategoryId]);
+
+  /* ---------- UI handlers ---------- */
+  const onClickAdd = async () => {
+    // keep button interactive – just notify if address is incomplete
+    const p = await refreshProfile();
+    if (!hasProfileAddress(p)) {
+      notify(
+        "Please complete your address (province, municipal/city, barangay, latitude & longitude) in Account Settings before adding a product."
+      );
+      return;
+    }
+
+    setBtnType("Add");
+    setForm({
+      prod_id: null,
+      prod_name: "",
+      prod_description: "",
+      p_categ_id: categories[0]?.p_categ_id || "",
+      size_id: sizes[0]?.size_id || "",
+      prod_price_per_tray: "",
+      prod_status: "active",
+      prod_img: "",
+    });
+    setPreviewUrl("");
+    setIsModalOpen(true);
+  };
+
+  const onClickEdit = (product) => {
+    setBtnType("Edit");
+    setForm({
+      prod_id: product.prod_id,
+      prod_name: product.prod_name,
+      prod_description: product.prod_description || "",
+      p_categ_id: product.p_categ_id,
+      size_id: product.size_id,
+      prod_price_per_tray: product.prod_price_per_tray,
+      prod_status: product.prod_status,
+      prod_img: product.prod_img || "",
+    });
+    setPreviewUrl(product.prod_img || "");
+    setIsModalOpen(true);
+  };
+
+  async function onSave() {
+    // defense-in-depth: block save if address incomplete
+    const p = profile ?? (await refreshProfile());
+    if (!hasProfileAddress(p)) {
+      notify(
+        "You must complete your address (province, municipal/city, barangay, latitude & longitude) in Account Settings before saving a product."
+      );
+      return;
+    }
+
+    const errs = validateProductForm(form);
+    if (errs.length) {
+      notify(errs.join("\n"), "warning", "Check your inputs");
+      return;
+    }
+
+    try {
+      await upsertProduct({
+        ...form,
+        p_categ_id: Number(form.p_categ_id),
+        size_id: Number(form.size_id),
+        prod_price_per_tray: Number(form.prod_price_per_tray),
+      });
+      setIsModalOpen(false);
+      await reloadList();
+      notify("Product saved successfully.", "success", "Saved");
+    } catch (e) {
+      console.error("upsert error:", e);
+      notify(e.message || "Failed to save product", "error", "Error");
+    }
+  }
+
+  const sizesHeader = useMemo(
+    () => (current?.size ? [current.size] : []),
+    [current]
+  );
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      {/* LEFT CARD */}
-      <div className="flex flex-col gap-5 lg:flex-row w-full col-span-2">
-        <Card>
-          <div className="flex flex-col gap-3">
-            <h1 className="text-base md:text-lg text-gray-400 font-bold italic">
-              Category: Egg
-            </h1>
-            <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
-              <div className="p-4 bg-softSecondaryYellow shadow-md rounded-lg">
-                <img src={TrayEggImg} alt="Egg Tray" className="w-40 sm:w-50" />
-              </div>
-              <div className="flex flex-col gap-2 text-center sm:text-left">
-                <h1 className="text-primaryYellow font-bold text-xl sm:text-2xl">
-                  Tray of Egg
-                </h1>
-                <p className="text-sm sm:text-base text-gray-600">
-                  Enjoy the taste of farm-fresh goodness! Our eggs are carefully
-                  selected to bring you the best quality and freshness.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
+    <>
+      {/* Toast */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
-        {/* RIGHT CARD */}
-        <Card>
-          <div className="flex flex-col gap-5">
-            <h1 className="text-gray-400 text-lg font-bold">
-              Recently Available Sizes
-            </h1>
-            <div className="flex flex-wrap gap-2 sm:gap-4">
-              {sizes.map((data) => (
-                <div
-                  key={data.id}
-                  className={`px-3 py-2 rounded-full text-xs sm:text-sm font-bold ${
-                    data.isAvailable
-                      ? "bg-softSecondaryYellow text-primaryYellow"
-                      : "bg-gray-300 text-gray-400"
-                  }`}
-                >
-                  {data.size}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* LEFT CARD */}
+        <div className="flex flex-col gap-5 lg:flex-row w-full col-span-2">
+          <Card>
+            <div className="flex flex-col gap-3">
+              <h1 className="text-base md:text-lg text-gray-400 font-bold italic">
+                Category: {current?.category || "—"}
+              </h1>
+              <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
+                <div className="p-4 bg-softSecondaryYellow shadow-md rounded-lg">
+                  <img
+                    src={current?.prod_img || TrayEggImg}
+                    alt="Product"
+                    className="w-40 sm:w-50"
+                  />
                 </div>
-              ))}
+                <div className="flex flex-col gap-2 text-center sm:text-left">
+                  <h1 className="text-primaryYellow font-bold text-xl sm:text-2xl">
+                    {current?.prod_name || "—"}
+                  </h1>
+                  <p className="text-sm sm:text-base text-gray-600">
+                    {current?.prod_description || "—"}
+                  </p>
+                  <div className="text-sm text-gray-600">
+                    Price / Tray:{" "}
+                    {current ? Number(current.prod_price_per_tray).toFixed(2) : "—"}
+                    <br />
+                    Status: {current?.prod_status || "—"}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
 
-      {/* FILTER + ACTIONS */}
-      <div className="col-span-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Filter Dropdown */}
-        <div className="flex flex-row items-center gap-3">
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="border border-gray-300 shadow-md rounded-lg px-3 py-2 text-gray-600 bg-white text-sm sm:text-base"
-          >
-            <option value="" disabled>
-              Filter by Category
-            </option>
-            {types.map((type, index) => (
-              <option key={index} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => alert("clicked")}
-            className="flex items-center border rounded-lg px-3 sm:px-5 py-2 text-gray-600 hover:border-primaryYellow hover:text-primaryYellow"
-          >
-            <IoFilterOutline />
-          </button>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-3 sm:gap-5">
-          <button
-            onClick={() => handleModal("Edit")}
-            className="cursor-pointer bg-gray-500 text-white text-sm sm:text-lg font-medium rounded-lg px-4 sm:px-5 py-2 hover:opacity-90"
-          >
-            Edit Product
-          </button>
-          <button
-            onClick={() => handleModal("Add")}
-            className="cursor-pointer bg-primaryYellow text-white text-sm sm:text-lg font-medium rounded-lg px-4 sm:px-5 py-2 hover:opacity-90"
-          >
-            Add Product
-          </button>
-        </div>
-      </div>
-
-      {/* TABLE */}
-      <div className="col-span-2 p-4 sm:p-6 rounded-lg border border-gray-200 shadow-lg overflow-x-auto">
-        <ProductTable type={selectedType} />
-      </div>
-
-      {/* MODAL */}
-      <Modal
-        isOpen={isModalOpen}
-        style={{
-          ...modalBaseStyle,
-          content: {
-            ...modalBaseStyle.content,
-            width: "90%",
-            maxWidth: "600px",
-          },
-        }}
-      >
-        <div className="flex flex-col p-4 sm:p-8 space-y-6">
-          <h1 className="text-primaryYellow text-xl sm:text-2xl font-bold text-center">
-            {btnType} Product Details
-          </h1>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Upload Product Image */}
-            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer text-gray-400 hover:bg-gray-100 shadow-md h-32 sm:h-auto">
-              <span>Upload Product Image</span>
-              <input type="file" accept="image/*" className="hidden" />
-            </label>
-
+          {/* RIGHT CARD */}
+          <Card>
             <div className="flex flex-col gap-5">
-              {/* Category */}
-              <div className="flex flex-col">
-                <label className="mb-2 font-bold text-gray-400">Category</label>
-                <select className="border rounded-lg p-3 text-gray-600 shadow-md">
-                  <option value="" disabled>
-                    Select a category
-                  </option>
-                  <option value="egg">Egg</option>
-                  <option value="meat">Meat</option>
-                  <option value="vegetables">Vegetables</option>
-                </select>
+              <h1 className="text-gray-400 text-lg font-bold">Recently Available Size</h1>
+              <div className="flex flex-wrap gap-2 sm:gap-4">
+                {sizesHeader.map((label, i) => (
+                  <div
+                    key={i}
+                    className="px-3 py-2 rounded-full text-xs sm:text-sm font-bold bg-softSecondaryYellow text-primaryYellow"
+                  >
+                    {label}
+                  </div>
+                ))}
+                {!sizesHeader.length && (
+                  <div className="text-gray-400 text-sm">No size</div>
+                )}
               </div>
 
-              {/* Title */}
-              <div className="flex flex-col">
-                <label className="mb-2 font-bold text-gray-400">
-                  Product Title
+              {/* FILTER */}
+              <div className="flex items-center gap-3">
+                <select
+                  value={selectedCategoryId ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedCategoryId(v ? Number(v) : null);
+                  }}
+                  className="border border-gray-300 shadow-md rounded-lg px-3 py-2 text-gray-600 bg-white text-sm sm:text-base"
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c.p_categ_id} value={c.p_categ_id}>
+                      {c.category}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={reloadList}
+                  className="flex items-center border rounded-lg px-3 sm:px-5 py-2 text-gray-600 hover:border-primaryYellow hover:text-primaryYellow"
+                  title="Apply filter"
+                >
+                  <IoFilterOutline />
+                </button>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* TABLE + Add button */}
+        <div className="col-span-2 p-4 sm:p-6 rounded-lg border border-gray-200 shadow-lg overflow-x-auto">
+          <div className="flex justify-end mb-3">
+            <button
+              onClick={onClickAdd}
+              className="bg-primaryYellow text-white text-sm sm:text-lg font-medium rounded-lg px-4 sm:px-5 py-2 hover:opacity-90"
+            >
+              Add Product
+            </button>
+          </div>
+          <ProductTable products={products} loading={loading} onEdit={onClickEdit} />
+        </div>
+
+        {/* MODAL */}
+        <Modal
+          isOpen={isModalOpen}
+          onRequestClose={() => setIsModalOpen(false)}
+          style={modalBaseStyle}
+        >
+          <div className="flex flex-col p-4 sm:p-8 space-y-6">
+            <h1 className="text-primaryYellow text-xl sm:text-2xl font-bold text-center">
+              {btnType} Product Details
+            </h1>
+
+            {/* Row 1: Image + Category + Size */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Upload Product Image (with preview) */}
+              <div className="w-full">
+                <label
+                  className="relative block w-full border rounded-lg shadow-md bg-gray-50"
+                  style={{ height: 180 }}
+                >
+                  {(previewUrl || form.prod_img) ? (
+                    <img
+                      src={previewUrl || form.prod_img}
+                      alt="preview"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      Change Image
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+
+                      // 1) instant preview
+                      const local = URL.createObjectURL(f);
+                      setPreviewUrl(local);
+
+                      try {
+                        // 2) upload and store PUBLIC URL
+                        setIsUploading(true);
+                        const publicUrl = await uploadProductImage(f);
+                        setForm((v) => ({ ...v, prod_img: publicUrl }));
+                      } catch (err) {
+                        console.error("upload error:", err);
+                        notify(err.message || "Upload failed", "error", "Error");
+                        setPreviewUrl("");
+                      } finally {
+                        setIsUploading(false);
+                        URL.revokeObjectURL(local);
+                      }
+                    }}
+                  />
                 </label>
+
+                <div className="mt-1 text-xs text-gray-500">
+                  {isUploading ? "Uploading image…" : "Click the box to choose an image"}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-5">
+                {/* Category */}
+                <div className="flex flex-col">
+                  <label className="mb-2 font-bold text-gray-400">Category</label>
+                  <select
+                    value={form.p_categ_id || ""}
+                    onChange={(e) =>
+                      setForm((v) => ({ ...v, p_categ_id: Number(e.target.value) }))
+                    }
+                    className="border rounded-lg p-3 text-gray-600 shadow-md"
+                  >
+                    <option value="" disabled>
+                      Select a category
+                    </option>
+                    {categories.map((c) => (
+                      <option key={c.p_categ_id} value={c.p_categ_id}>
+                        {c.category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Size */}
+                <div className="flex flex-col">
+                  <label className="mb-2 font-bold text-gray-400">Size</label>
+                  <select
+                    value={form.size_id || ""}
+                    onChange={(e) =>
+                      setForm((v) => ({ ...v, size_id: Number(e.target.value) }))
+                    }
+                    className="border rounded-lg p-3 text-gray-600 shadow-md"
+                  >
+                    <option value="" disabled>
+                      Select a size
+                    </option>
+                    {sizes.map((s) => (
+                      <option key={s.size_id} value={s.size_id}>
+                        {s.size}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Name */}
+            <div className="flex flex-col">
+              <label className="mb-2 font-bold text-gray-400">Product Name</label>
+              <input
+                type="text"
+                placeholder="Enter product name"
+                value={form.prod_name}
+                onChange={(e) => setForm((v) => ({ ...v, prod_name: e.target.value }))}
+                className="border rounded-lg p-3 text-gray-600 shadow-md"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="flex flex-col">
+              <label className="mb-2 font-bold text-gray-400">Product Description</label>
+              <textarea
+                placeholder="Enter product description"
+                value={form.prod_description}
+                onChange={(e) =>
+                  setForm((v) => ({ ...v, prod_description: e.target.value }))
+                }
+                className="border rounded-lg p-3 resize-none shadow-md text-gray-600"
+                rows={3}
+              />
+            </div>
+
+            {/* Price + Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="flex flex-col">
+                <label className="mb-2 font-bold text-gray-400">Price / Tray</label>
                 <input
-                  type="text"
-                  placeholder="Enter product title"
+                  type="number"
+                  step="0.01"
+                  value={form.prod_price_per_tray}
+                  onChange={(e) =>
+                    setForm((v) => ({ ...v, prod_price_per_tray: e.target.value }))
+                  }
                   className="border rounded-lg p-3 text-gray-600 shadow-md"
+                  placeholder="e.g., 210.00"
                 />
               </div>
+
+              <div className="flex flex-col">
+                <label className="mb-2 font-bold text-gray-400">Status</label>
+                <select
+                  value={form.prod_status}
+                  onChange={(e) =>
+                    setForm((v) => ({ ...v, prod_status: e.target.value }))
+                  }
+                  className="border rounded-lg p-3 text-gray-600 shadow-md"
+                >
+                  <option value="active">active</option>
+                  <option value="inactive">inactive</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-5">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 bg-gray-400 text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSave}
+                className="flex-1 bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
+                disabled={isUploading}
+                title={isUploading ? "Please wait for the image upload to finish" : ""}
+              >
+                Save Changes
+              </button>
             </div>
           </div>
-
-          {/* Description */}
-          <div className="flex flex-col">
-            <label className="mb-2 font-bold text-gray-400">
-              Product Description
-            </label>
-            <textarea
-              placeholder="Enter product description"
-              className="border rounded-lg p-3 resize-none shadow-md text-gray-600"
-              rows={3}
-            />
-          </div>
-
-          {/* Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-5">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="flex-1 bg-gray-400 text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="flex-1 bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
-            >
-              Save Changes
-            </button>
-          </div>
-        </div>
-      </Modal>
-    </div>
+        </Modal>
+      </div>
+    </>
   );
 }

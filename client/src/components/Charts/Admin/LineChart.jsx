@@ -1,75 +1,73 @@
-import React, { useState } from "react";
+import React, { useMemo } from "react";
+import "chart.js/auto";
 import { Line } from "react-chartjs-2";
-import {
-  lineChartOptions,
-  monthlyData,
-  weeklyData,
-} from "../../../constants/mockData";
-import { MdKeyboardArrowRight } from "react-icons/md";
-import { IoChevronDown } from "react-icons/io5";
 
-export default function LineChart() {
-  const [view, setView] = useState("weekly"); // default
-  const [isOpen, setIsOpen] = useState(false);
+/**
+ * props:
+ *  - data: [{ d: 'YYYY-MM-DD', revenue: number }]
+ *  - bestProduct?: { prod_id:number, prod_name:string, trays:number, revenue:number }
+ */
+export default function LineChart({ data = [], bestProduct = null }) {
+  const chartData = useMemo(() => {
+    const fmtDay = new Intl.DateTimeFormat("en", { weekday: "short" });
+    const labels = data.map((r) => fmtDay.format(new Date(r.d)));
+    const values = data.map((r) => Number(r.revenue || 0));
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Revenue (₱/day)",
+          data: values,
+          borderColor: "#b91c1c",
+          backgroundColor: "rgba(185, 28, 28, .15)",
+          borderWidth: 2,
+          tension: 0.25,
+          fill: true,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+      ],
+    };
+  }, [data]);
 
-  const options = ["weekly", "monthly"];
+  const options = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ₱${Number(ctx.parsed.y ?? 0).toFixed(2)}`,
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          grid: { color: "rgba(0,0,0,0.05)" },
+          ticks: { callback: (v) => `₱${v}` },
+        },
+      },
+    }),
+    []
+  );
 
-  const handleSelect = (option) => {
-    setView(option);
-    setIsOpen(false);
-  };
-
-  const chartData = view === "weekly" ? weeklyData : monthlyData;
   return (
-    <div className="w-full h-full flex flex-col gap-5">
-      <div className="flex flex-row justify-between items-center">
-        <div className="flex flex-row items-center gap-5">
-          <h1 className="text-primaryYellow font-bold text-2xl">Sales Trend</h1>
-          <div className="flex flex-row gap-2 items-center text-gray-400 cursor-pointer">
-            <p className="text-base">View More</p>
-            <MdKeyboardArrowRight className="w-5 h-5" />
-          </div>
+    <div className="w-full h-80">
+      {bestProduct && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold text-gray-600">Top product:</span>
+          <span className="px-2 py-1 rounded-full bg-softSecondaryYellow text-primaryYellow font-semibold">
+            {bestProduct.prod_name}
+          </span>
+          <span className="text-gray-500">
+            • {bestProduct.trays} trays • ₱{Number(bestProduct.revenue).toFixed(2)}
+          </span>
         </div>
-        {/* Filter buttons */}
-        <div className="relative inline-block text-left mb-3">
-          {/* Dropdown Trigger */}
-          <div
-            className="flex items-center justify-between gap-2 px-4 py-2 bg-primaryYellow text-gray-700 hover:bg-gray-300 rounded-lg cursor-pointer font-semibold text-sm min-w-[120px]"
-            onClick={() => setIsOpen(!isOpen)}
-          >
-            <span className="capitalize">{view}</span>
-            <IoChevronDown
-              className={`transition-transform duration-200 ${
-                isOpen ? "rotate-180" : ""
-              }`}
-            />
-          </div>
-
-          {/* Dropdown Menu */}
-          {isOpen && (
-            <div className="absolute mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-              {options.map((option) => (
-                <div
-                  key={option}
-                  onClick={() => handleSelect(option)}
-                  className={`px-4 py-2 text-sm capitalize cursor-pointer transition hover:bg-gray-100 ${
-                    view === option
-                      ? "bg-primaryYellow text-white"
-                      : "text-gray-700"
-                  }`}
-                >
-                  {option}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Chart */}
-      <div className="h-64 w-full">
-        <Line data={chartData} options={lineChartOptions} />
-      </div>
+      )}
+      <Line data={chartData} options={options} />
     </div>
   );
 }
