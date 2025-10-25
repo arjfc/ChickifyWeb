@@ -1,85 +1,169 @@
-import React, { useState } from "react";
-import LogsTable from "../../../components/super-admin/tables/LogsTable";
+import { useState, useEffect } from "react";
+import LogsTable from "@/components/super-admin/tables/LogsTable";
+import TrackUserTable from "@/components/super-admin/tables/TrackUserLoginTable";
 import { BsGrid } from "react-icons/bs";
-import { DatePicker } from "@mui/x-date-pickers";
-import { IoFilterSharp } from "react-icons/io5";
+import { fetchAllActionType } from "@/services/activityLogs";
+import { LuCalendar } from "react-icons/lu";
 
 export default function ActivityLogs() {
-  const adminOptions = ["Admin", "Payment Status", "Order Status"];
+  // ===== Activity Logs (tabs) =====
+  const adminOptions = ["Admin", "Farmer", "Buyer"];
   const [selectedAdminOption, setSelectedAdminOption] = useState("Admin");
 
-  const [value, onChange] = useState(new Date());
+  // ===== Activity logs filters =====
+  const [dateRange, setDateRange] = useState("all");
+  const [types, setTypes] = useState(["All"]);
+  const [selectedType, setSelectedType] = useState("All");
 
-  const types = ["All", "Approved Listing", "Rejected Listing"];
-  const [selectedType, setSelectedType] = useState("");
+  // ===== Track Last Sign-ins filters =====
+  const [loginRole, setLoginRole] = useState("All");
+  const [loginDateRange, setLoginDateRange] = useState("all");
+
+  const dateOptions = [
+    { value: "all", label: "All time" },
+    { value: "today", label: "Today" },
+    { value: "yesterday", label: "Yesterday" },
+    { value: "7", label: "Last 7 days" },
+    { value: "30", label: "Last 30 days" },
+    { value: "last_month", label: "Last month" },
+  ];
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const actionTypes = await fetchAllActionType();
+        setTypes(["All", ...actionTypes]);
+      } catch (err) {
+        console.error("Failed to load action types:", err);
+      }
+    })();
+  }, []);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-row justify-between items-center bg-primaryYellow p-3 rounded-2xl">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-row gap-5 items-center">
-            {adminOptions.map((data) => (
-              <div
-                onClick={() => setSelectedAdminOption(data)}
-                className={`cursor-pointer rounded-xl px-5 py-2 transition-colors ${
-                  selectedAdminOption === data
-                    ? "border border-primaryYellow text-black  bg-yellow-50"
-                    : " text-black hover:border-primaryYellow hover:text-yellow-100"
-                }`}
-                key={data}
-              >
-                {data}
-              </div>
-            ))}
+    <div className="flex flex-col gap-6">
+
+      {/* =================== Activity Logs =================== */}
+      <div className="flex items-center bg-softPrimaryYelllow p-2 rounded-xl">
+        <div className="flex gap-2">
+          {adminOptions.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setSelectedAdminOption(opt)}
+              className={`px-3 py-1 rounded-lg stext-sm transition-colors ${
+                selectedAdminOption === opt
+                  ? "border border-primaryYellow text-black bg-yellow-50"
+                  : "text-black hover:bg-yellow-100/40"
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filters left, button right */}
+      <div className="flex items-center justify-between">
+        {/* Left: filters */}
+        <div className="flex items-center gap-3 [&_svg]:w-4 [&_svg]:h-4">
+          {/* Date Range */}
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
+            <LuCalendar className="text-gray-600" />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {dateOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Action Type */}
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
+            <BsGrid className="text-gray-600" />
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {types.map((type, i) => (
+                <option key={i} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      </div>
 
-      {/* Filters Row */}
-      <div className="flex flex-row items-center relative gap-5">
-        {/* Date Range Picker */}
-        <DatePicker
-          label="Date Range"
-          onChange={(newValue) => onChange(newValue)}
-          slotProps={{
-            textField: {
-              size: "small",
-              sx: { width: 200 }, // 👈 set width here
-            },
-          }}
-        />
-
-        <div className="flex flex-row items-center gap-2 border border-gray-300 shadow-md rounded-lg px-3 py-2 text-gray-600">
-          <BsGrid className="text-xl" />
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="bg-transparent outline-none text-lg cursor-pointer"
-          >
-            <option value="" disabled>
-              Action Type
-            </option>
-            {types.map((type, index) => (
-              <option key={index} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Filter Icon */}
-        <div
-          onClick={() => {}}
-          className="flex gap-3 font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90 border border-gray-400 text-gray-400"
+        {/* Right: button */}
+        <button
+          onClick={() => alert("clicked")}
+          className="cursor-pointer bg-primaryYellow text-white text-sm font-semibold rounded-lg px-4 py-2"
         >
-          <IoFilterSharp onClick={() => alert("clicked")} className="text-xl" />
-        </div>
+          Generate Activity Logs Report
+        </button>
       </div>
 
-      {/* Logs Table */}
-      <div className="p-6 rounded-lg border border-gray-200 shadow-lg">
-        <LogsTable selectedOption={selectedAdminOption} type={selectedType} />
+      <LogsTable
+        selectedOption={selectedAdminOption}
+        type={selectedType}
+        dateRange={dateRange}
+      />
+
+      {/* =================== Track last sign-ins =================== */}
+      <h2 className="text-xl font-semibold text-gray-800 ">TRACK LAST SIGN-INS</h2>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 [&_svg]:w-4 [&_svg]:h-4">
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
+            <LuCalendar className="text-gray-600" />
+            <select
+              value={loginDateRange}
+              onChange={(e) => setLoginDateRange(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {dateOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Role */}
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
+            <BsGrid className="text-gray-600" />
+            <select
+              value={loginRole}
+              onChange={(e) => setLoginRole(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {["All", "admin", "farmer", "buyer"].map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Right: button */}
+        <button
+          onClick={() => alert("clicked")}
+          className="cursor-pointer bg-primaryYellow text-white text-sm font-semibold rounded-lg px-4 py-2"
+        >
+          Generate User Logs Report
+        </button>
       </div>
+
+      <TrackUserTable
+        limit={15}
+        userrole={loginRole}
+        date={loginDateRange}
+      />
     </div>
   );
 }

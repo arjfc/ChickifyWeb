@@ -1,17 +1,26 @@
 import React, { useState } from "react";
 import PayoutReqTable from "../../../components/admin/tables/PayoutReqTable";
-import { DatePicker } from "@mui/x-date-pickers";
+import { LuCalendar } from "react-icons/lu";
 
 export default function PayoutRequest() {
-  const options = ["Pending", "Processing", "Approved", "Rejected"];
+  const options = ["Pending", "Approved", "Rejected"];
   const [selectedOption, setSelectedOption] = useState("Pending");
 
-  const [value, onChange] = useState(new Date());
+  // ⬇️ Copied date range state + options from FIRST CODE
+  const [dateRange, setDateRange] = useState("all");
+  const dateOptions = [
+    { value: "all", label: "All time" },
+    { value: "today", label: "Today" },
+    { value: "yesterday", label: "Yesterday" },
+    { value: "7", label: "Last 7 days" },
+    { value: "30", label: "Last 30 days" },
+    { value: "last_month", label: "Last month" },
+  ];
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-row justify-between">
-        <div className="flex flex-row justify-between items-center border-b border-gray-300 gap-20">
+        <div className="flex flex-row justify-between items-center border-b border-gray-300 gap-10">
           {options.map((data) => (
             <div
               key={data}
@@ -28,28 +37,36 @@ export default function PayoutRequest() {
         </div>
 
         <div className="flex flex-row justify-between items-center gap-5">
-          <DatePicker
-            label="Filter by Date"
-            onChange={(newValue) => onChange(newValue)}
-            slotProps={{
-              textField: {
-                size: "small",
-                sx: { width: 200 }, // 👈 set width here
-              },
-            }}
-          />
+          {/* ⬇️ Replaced DatePicker with the date range dropdown (same as FIRST CODE) */}
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-2">
+            <LuCalendar className="text-gray-600" />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {dateOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            onClick={() => alert("clicked")}
+            className="cursor-pointer bg-yellow-500 text-white text-md font-bold rounded-lg px-5 py-2"
+          >
+            Approve
+          </div>
+
           <div
             onClick={() => alert("clicked")}
             className="cursor-pointer bg-gray-600 text-white text-md font-bold rounded-lg px-5 py-2"
           >
             Reject
           </div>
-          <div
-            onClick={() => alert("clicked")}
-            className="cursor-pointer bg-primaryYellow text-white text-md font-bold rounded-lg px-5 py-2"
-          >
-            Approve
-          </div>
+       
         </div>
       </div>
 
