@@ -1,3 +1,5 @@
+// parent container
+// 2ND CODE (date range copied from FIRST CODE)
 import React, { useState } from "react";
 import ReportTable from "../../../components/admin/tables/ReportTable";
 import { LuCalendar } from "react-icons/lu";
@@ -12,8 +14,9 @@ export default function Reports() {
   ];
 
   const [selectedOption, setSelectedOption] = useState("Payout History");
-  // const [value, onChange] = useState(new Date());
-  const [reportDateRange, setReportDateRange] = useState("all"); 
+
+  // 🔽 Copied date-range state + options from FIRST CODE
+  const [dateRange, setDateRange] = useState("all");
   const dateOptions = [
     { value: "all", label: "All time" },
     { value: "today", label: "Today" },
@@ -22,7 +25,6 @@ export default function Reports() {
     { value: "30", label: "Last 30 days" },
     { value: "last_month", label: "Last month" },
   ];
-
 
   return (
     <div className="flex flex-col gap-5">
@@ -46,23 +48,22 @@ export default function Reports() {
 
         {/* Date + Button (not underlined) */}
         <div className="flex flex-row items-center gap-4">
-          <div className="flex items-center gap-3 [&_svg]:w-4 [&_svg]:h-4">
-                    <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-1">
-                      <LuCalendar className="text-gray-600" />
-                      <select
-                        value={reportDateRange}
-                        onChange={(e) => setReportDateRange(e.target.value)}
-                        className="bg-transparent outline-none text-sm text-gray-700"
-                      >
-                        {dateOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-          
-                  </div>
+          {/* 🔽 Replaced MUI DatePicker with the same dropdown from FIRST CODE */}
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-2">
+            <LuCalendar className="text-gray-600" />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {dateOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div
             onClick={() => alert("Generate Report clicked")}
             className="cursor-pointer bg-primaryYellow text-white text-base font-semibold rounded-lg px-4 py-2"
@@ -74,7 +75,8 @@ export default function Reports() {
 
       {/* Table Section */}
       <div className="p-6 rounded-lg border border-gray-200 shadow-lg">
-        <ReportTable selectedOption={selectedOption} reportDateRange={reportDateRange} />
+        {/* ⬇️ Forward the dateRange just like in FIRST CODE */}
+        <ReportTable selectedOption={selectedOption} dateRange={dateRange} />
       </div>
     </div>
   );

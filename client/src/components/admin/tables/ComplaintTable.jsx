@@ -6,7 +6,7 @@ import { FaCircleInfo } from "react-icons/fa6";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import Modal from "react-modal";
 import eggImage from "../../../assets/egg.png";
-import { viewRefundOverviewAdmin, approveRefundAdmin } from "@/services/Refund";
+import {viewRefundOverviewAdmin,approveRefundAdmin,rejectRefundAdmin,} from "@/services/Refund";
 import { supabase } from "@/lib/supabase";
 
 const modalStyle = {
@@ -40,18 +40,8 @@ const guessTypeFromName = (name) => {
 
 /**
  * Upload an image (by URI) to Supabase Storage and return its public URL.
- * @param {number} id
- * @param {{ uri: string, type?: string|null, fileName?: string|null }} img
- * @param {string} [bucketName="refund-proofs"]
- * @param {string} [folder="refunds"]
- * @returns {Promise<string>} public URL
  */
-async function uploadImageFromUrl(
-  id,
-  img,
-  bucketName = "refund-proofs",
-  folder = "refunds"
-) {
+async function uploadImageFromUrl(id, img, bucketName = "refund-proofs", folder = "refunds") {
   const fileName = img.fileName ?? `proof_${Date.now()}.jpg`;
   const path = `${folder}/${id}/${fileName}`;
 
@@ -153,12 +143,12 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
   const [isConfirming, setIsConfirming] = useState(false);
   const fileInputRef = useRef(null);
 
-  // 🔹 Reject modal (UI-only)
+  // Reject modal state
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
 
-  // 🔄 Data from RPC
+  // Data
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -171,25 +161,20 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
       refundId: r.refund_id,
       customerName: r.customer_name ?? "—",
       orderId: r.order_id,
-
-      // For Pending/Approved we keep original reason
       reason: r.reason ?? "—",
-
-      // 👇 NEW: reason for rejected
       reasonRejected: r.reason_rejected ?? d.reason_rejected ?? null,
 
-      // raw ISO dates for backend filtering (unformatted)
+      // raw ISO dates for filtering
       dateSubmittedISO: r.date_submitted ?? null,
       refundedOnISO: r.resolved_at ?? d.resolved_at ?? null,
       rejectedAtISO: r.rejected_at ?? d.rejected_at ?? null,
 
-      // formatted dates for display
+      // formatted for display
       dateSubmitted: fmtPHDate(r.date_submitted),
       status: r.status ?? "—",
       rejectedAt: fmtPHDate(r.rejected_at ?? d.rejected_at ?? null),
       refundedOn: fmtPHDate(r.resolved_at ?? d.resolved_at ?? null),
 
-      // Prefer direct proof_image_url if your view projects it, else details.image_proof_url
       imageProof: r.proof_image_url ?? d.image_proof_url ?? null,
 
       totalAmountPaid: Number(os.total_order ?? 0),
@@ -201,7 +186,6 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
       gcashNumber: d.gcash_number ?? null,
       payoutInfoId: d.payout_info_id ?? null,
 
-      // 👇 NEW: refunded amount coming from your RPC/view (details or top-level)
       refundedAmount:
         r.refunded_amount != null
           ? Number(r.refunded_amount)
@@ -248,7 +232,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     (selectedOption || "").toLowerCase() === "in review";
   const isApprovedTab = (selectedOption || "").toLowerCase() === "approved";
   const isRefundedTab = (selectedOption || "").toLowerCase() === "refunded";
-  const isRejectedTab = (selectedOption || "").toLowerCase() === "rejected"; // 👈 NEW
+  const isRejectedTab = (selectedOption || "").toLowerCase() === "rejected";
 
   // headers
   const headersWithSubmitted = [
@@ -295,7 +279,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     setSelectAll(updated.every(Boolean));
   };
 
-  // base status filter (unchanged)
+  // base status filter
   const baseFiltered = useMemo(() => {
     if (!selectedOption || selectedOption === "All") return rows;
     return rows.filter(
@@ -303,7 +287,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     );
   }, [rows, selectedOption]);
 
-  // ===== DATE FILTER (uses computeRange from FIRST CODE) =====
+  // date filter
   const dateFiltered = useMemo(() => {
     const { start, end } = computeRange(date);
     if (!start && !end) return baseFiltered;
@@ -311,7 +295,6 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     const startTs = start ? new Date(start).getTime() : null;
     const endTs = end ? new Date(end).getTime() : null;
 
-    // pick which date column to use based on tab
     const pickISO = (r) => {
       if (isApprovedTab || isRefundedTab) return r.refundedOnISO;
       if (isRejectedTab) return r.rejectedAtISO;
@@ -367,30 +350,26 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     const amountNum = parseFloat(refundAmount || "0");
     if (!(amountNum > 0)) return;
 
-    // Process selected items or the currently viewed item
     const items = selectedItems.length ? selectedItems : (modalData ? [modalData] : []);
 
     setIsConfirming(true);
     try {
       for (const item of items) {
-        // 1) Upload to Storage
         const publicUrl = await uploadImageFromUrl(item.refundId, {
-          uri: refundImagePreview,                 // blob URL from preview
+          uri: refundImagePreview,
           type: refundImageFile?.type ?? null,
           fileName: refundImageFile?.name ?? null,
         });
 
-        // 2) Call approve_refund RPC
         await approveRefundAdmin({
           refundId: item.refundId,
-          proofImgUrl: publicUrl,                  // saved to refund_req.proof_img_url
-          gcashName: item.gcashName ?? null,       // optional (server upserts if present)
-          gcashNumber: item.gcashNumber ?? null,   // optional
-          amount: amountNum,                       // or null to let server resolve
+          proofImgUrl: publicUrl,
+          gcashName: item.gcashName ?? null,
+          gcashNumber: item.gcashNumber ?? null,
+          amount: amountNum,
         });
       }
 
-      // 3) Reset UI + reload list
       setIsRefundOpen(false);
       clearRefundImage();
       setRefundAmount("");
@@ -417,11 +396,11 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
   // ===== Listen for Approve/Reject triggers BUT ONLY OPEN IF A CHECKBOX IS SELECTED =====
   useEffect(() => {
     const handleOpenRefund = () => {
-      if (selectedItems.length === 0) return; // ❗ Guard: require at least one checkbox
+      if (selectedItems.length === 0) return;
       setIsRefundOpen(true);
     };
     const handleOpenReject = () => {
-      if (selectedItems.length === 0) return; // ❗ Guard: require at least one checkbox
+      if (selectedItems.length === 0) return;
       setIsRejectOpen(true);
     };
 
@@ -431,24 +410,34 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
       window.removeEventListener("openRefundModal", handleOpenRefund);
       window.removeEventListener("openRejectModal", handleOpenReject);
     };
-  }, [selectedItems.length]); // rebind when selection changes
+  }, [selectedItems.length]);
 
-  // ========== Reject modal handlers (UI-only; NO RPC) ==========
+  // ========== Reject modal handlers — NOW CALLS RPC ==========
   const confirmReject = useCallback(async () => {
     const reason = (rejectReason || "").trim();
     if (!reason) return;
+    if (selectedItems.length === 0) return; // safety (modal shouldn't open otherwise)
 
     setIsRejecting(true);
     try {
-      await new Promise((r) => setTimeout(r, 250));
+      // call RPC for each selected refund
+      await Promise.all(
+        selectedItems.map((item) =>
+          rejectRefundAdmin({ refundId: item.refundId, reason })
+        )
+      );
+
+      // close + reset
       setIsRejectOpen(false);
       setRejectReason("");
+      await reload(); // refresh table to move items to "Rejected" tab
     } catch (err) {
       console.error(err);
+      alert(err?.message || "Failed to reject refund.");
     } finally {
       setIsRejecting(false);
     }
-  }, [rejectReason]);
+  }, [rejectReason, selectedItems, reload]);
 
   const canConfirmReject = !!(rejectReason && rejectReason.trim().length > 0) && !isRejecting;
 
@@ -464,7 +453,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
             <td className="px-4 py-3 text-center">{item.customerName}</td>
             <td className="px-4 py-3 text-center">{item.orderId}</td>
 
-            {/* 👇 For Rejected tab, show reason_rejected; else show reason */}
+            {/* Rejected tab shows reason_rejected; else original reason */}
             <td className="px-4 py-3 text-center">
               {isRejectedTab ? (item.reasonRejected ?? "—") : item.reason}
             </td>
@@ -656,7 +645,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                       </p>
                     </div>
 
-                    {/* ✅ NEW: Refunded Amount (appears for Approved/Refunded) */}
+                    {/* Refunded Amount (Approved/Refunded) */}
                     {(String(modalData.status).toLowerCase() === "approved" ||
                       String(modalData.status).toLowerCase() === "refunded") && (
                       <div className="flex justify-between text-gray-900 font-extrabold mt-4 border-t pt-3">
@@ -686,7 +675,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
 
         {/* REFUND MODAL */}
         <Modal
-          isOpen={isRefundOpen}
+         isOpen={isRefundOpen}
           onRequestClose={() => {
             setIsRefundOpen(false);
             clearRefundImage();
@@ -831,7 +820,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
           </div>
         </Modal>
 
-        {/* REJECT MODAL — UI ONLY */}
+        {/* REJECT MODAL — NOW CALLS RPC */}
         <Modal
           isOpen={isRejectOpen}
           onRequestClose={() => {
@@ -853,7 +842,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
               <button
                 onClick={() => {
                   setIsRejectOpen(false);
-                  setRejectReason("")
+                  setRejectReason("");
                 }}
                 className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-gray-800 shadow"
               >

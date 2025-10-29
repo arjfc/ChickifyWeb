@@ -71,8 +71,8 @@ export default function SignIn() {
         {/* Sign-in card */}
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-xl shadow-md p-8 sm:p-10 w-full md:w-[720px] lg:w-[550px]"
-        >
+         className="bg-white rounded-xl shadow-md p-8 sm:p-10 w-full md:w-[720px] lg:w-[550px]
+                     h-[560px] md:h-[620px] lg:h-[500px] flex flex-col overflow-y-auto">
           <h2 className="text-primaryYellow font-bold text-3xl sm:text-4xl text-center mb-5">
             Sign In
           </h2>
@@ -103,12 +103,12 @@ export default function SignIn() {
               autoComplete="current-password"
               className="border-2 border-darkRed rounded-lg px-3 py-3 w-full text-base"
             />
-            <div className="flex justify-between text-xs sm:text-sm text-gray-500 mt-1">
+            <div className="flex justify-between text-xs sm:text-sm text-gray-500 mt-4">
               <label className="flex items-center gap-1">
                 <input type="checkbox" className="accent-yellow-500 h-4 w-4" />
                 Remember Me
               </label>
-              <a href="#" className="text-primaryYellow hover:underline">
+              <a href="#" className="text-primaryYellow hover:underline font-semibold">
                 Forgot Password?
               </a>
             </div>
@@ -119,18 +119,18 @@ export default function SignIn() {
           <button
             type="submit"
             disabled={loading}
-            className="cursor-pointer bg-primaryYellow text-white w-full py-3 rounded-lg font-semibold text-base mb-3 hover:opacity-90 disabled:opacity-60"
+            className="cursor-pointer bg-primaryYellow text-white w-full py-3 rounded-lg font-semibold text-base mb-3 hover:opacity-90 disabled:opacity-60 mt-2"
           >
             {loading ? "Signing in…" : "Sign In"}
           </button>
 
-          <button
+          {/* <button
             type="button"
             onClick={() => alert("Google sign-in not wired yet")}
             className="bg-softPrimaryYelllow cursor-pointer text-secondaryYellow w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 text-base"
           >
             <FaGoogle className="text-lg" /> Continue with Google
-          </button>
+          </button> */}
 
           <p className="text-xs sm:text-sm text-gray-500 mt-4 text-center leading-snug">
             By signing in, you agree to Chickify’s{" "}
@@ -139,12 +139,12 @@ export default function SignIn() {
           </p>
 
           {/* Keep or remove this per your preference; SECOND CODE hid it */}
-          <p className="text-center text-sm mt-3">
+          {/* <p className="text-center text-sm mt-3">
             Don’t have an account?{" "}
             <Link to="/signup" className="text-primaryYellow font-semibold hover:underline">
               Sign Up
             </Link>
-          </p>
+          </p> */}
         </form>
 
         {/* Chicken Hero (fixed size, independent of form) */}
