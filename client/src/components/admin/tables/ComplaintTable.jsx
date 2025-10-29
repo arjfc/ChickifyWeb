@@ -6,12 +6,7 @@ import { FaCircleInfo } from "react-icons/fa6";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import Modal from "react-modal";
 import eggImage from "../../../assets/egg.png";
-import {
-  viewRefundOverviewAdmin,
-  approveRefundAdmin,
-  // 👇 NEW: import the client RPC wrapper
-  rejectRefundAdmin,
-} from "@/services/Refund";
+import {viewRefundOverviewAdmin,approveRefundAdmin,rejectRefundAdmin,} from "@/services/Refund";
 import { supabase } from "@/lib/supabase";
 
 const modalStyle = {

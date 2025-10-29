@@ -1,9 +1,15 @@
 // components/admin/tables/ReportTable.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Table from "../../Table";
-import { fetchEggProduction, fetchEggBatch } from "@/services/Reports";
+import {
+  fetchEggProduction,
+  fetchEggBatch,
+  fetchAdminSalesRecords,
+  // ⬇️ NEW: use the client you added in services/Reports.js
+  fetchPayoutOverviewList,
+} from "@/services/Reports";
 
-export default function ReportTable({ selectedOption }) {
+export default function ReportTable({ selectedOption, dateRange }) {
   // 🔹 Local state for Egg Production
   const [eggRows, setEggRows] = useState([]);
   const [eggLoading, setEggLoading] = useState(false);
@@ -11,6 +17,23 @@ export default function ReportTable({ selectedOption }) {
   // 🔹 Local state for Egg Stock
   const [batchRows, setBatchRows] = useState([]);
   const [batchLoading, setBatchLoading] = useState(false);
+
+  // 🔹 Local state for Sales Records
+  const [salesRows, setSalesRows] = useState([]);
+  const [salesLoading, setSalesLoading] = useState(false);
+
+  // 🔹 Local state for Payout History (NEW)
+  const [payoutRows, setPayoutRows] = useState([]);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+
+  // 🔹 Pagination
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
+
+  // Reset page on tab/date changes
+  useEffect(() => {
+    setPage(1);
+  }, [selectedOption, dateRange]);
 
   // mm/dd/yy like your sample "10/10/25"
   const mmddyy = (d) => {
@@ -23,6 +46,44 @@ export default function ReportTable({ selectedOption }) {
     return `${mm}/${dd}/${yy}`;
   };
 
+  // 🔹 Fetch payout history (APPROVED only)
+  useEffect(() => {
+    let alive = true;
+    if (selectedOption !== "Payout History") return;
+
+    (async () => {
+      try {
+        setPayoutLoading(true);
+        const list = await fetchPayoutOverviewList(); // calls RPC: view_payout_overview_admin
+        if (!alive) return;
+
+        const approvedOnly = (list || []).filter(
+          (r) => (r?.status || "").toLowerCase() === "approved"
+        );
+
+        const mapped = approvedOnly.map((r) => ({
+          payoutID: r.payout_id,
+          sellerName: r.requestor_name || "—",
+          amount: Number(r.amount ?? 0),
+          requestDate: mmddyy(r.request_date),
+          processDate: r.processed_at ? mmddyy(r.processed_at) : "—",
+          status: "Approved", // we filtered already; ensure capitalized
+        }));
+
+        setPayoutRows(mapped);
+      } catch (e) {
+        console.error("[ReportTable] view_payout_overview_admin:", e?.message || e);
+        setPayoutRows([]);
+      } finally {
+        if (alive) setPayoutLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [selectedOption]);
+
   // Fetch egg production when that tab is active
   useEffect(() => {
     let alive = true;
@@ -30,10 +91,10 @@ export default function ReportTable({ selectedOption }) {
     (async () => {
       try {
         setEggLoading(true);
-        const data = await fetchEggProduction({}); // no filters
+        const data = await fetchEggProduction({ dateRange });
         if (!alive) return;
         const mapped = (data || []).map((r) => ({
-          productionID: r.egg_prod,                         // keep your column name
+          productionID: r.egg_prod,
           farmerName: r.farmer_name || "—",
           flockID: r.flock_id ?? "—",
           productionDate: mmddyy(r.prod_date),
@@ -52,8 +113,10 @@ export default function ReportTable({ selectedOption }) {
         if (alive) setEggLoading(false);
       }
     })();
-    return () => { alive = false; };
-  }, [selectedOption]);
+    return () => {
+      alive = false;
+    };
+  }, [selectedOption, dateRange]);
 
   // Fetch egg batches when Egg Stock tab is active
   useEffect(() => {
@@ -62,10 +125,10 @@ export default function ReportTable({ selectedOption }) {
     (async () => {
       try {
         setBatchLoading(true);
-        const data = await fetchEggBatch({}); // no filters
+        const data = await fetchEggBatch({ dateRange });
         if (!alive) return;
         const mapped = (data || []).map((r) => ({
-          batchID: r.batch_id,                               // keep your column name
+          batchID: r.batch_id,
           farmerName: r.farmer_name || "—",
           productID: r.product_id || "—",
           eggQuantity: r.egg_quantity ?? 0,
@@ -83,21 +146,47 @@ export default function ReportTable({ selectedOption }) {
         if (alive) setBatchLoading(false);
       }
     })();
-    return () => { alive = false; };
-  }, [selectedOption]);
+    return () => {
+      alive = false;
+    };
+  }, [selectedOption, dateRange]);
 
-  // 🔹 Mock data for other report types (unchanged)
-  const payoutData = [
-    { payoutID: "PYT-3021", sellerName: "Maria Lopez", amount: 5000, requestDate: "10/10/25", processDate: "11/1/25", status: "Pending" },
-    { payoutID: "PYT-3022", sellerName: "Juan Dela Cruz", amount: 3500, requestDate: "10/11/25", processDate: "11/2/25", status: "Approved" },
-  ];
+  // Fetch sales records when Sales Records tab is active
+  useEffect(() => {
+    let alive = true;
+    if (selectedOption !== "Sales Records") return;
+    (async () => {
+      try {
+        setSalesLoading(true);
+        const data = await fetchAdminSalesRecords({ dateRange });
+        if (!alive) return;
+        const mapped = (data || []).map((r) => ({
+          orderID: r.order_id,
+          buyerName: r.buyer_name || "—",
+          productName: r.product_name || "—",
+          variant: r.size || "—",
+          quantity: r.quantity_sold ?? 0,
+          pricePerTray: r.price_per_tray ?? 0,
+          totalAmount: r.total_amount ?? 0,
+          orderDate: mmddyy(r.order_date),
+          fulfillmentDate: r.fulfillment_date ? mmddyy(r.fulfillment_date) : "—",
+          orderStatus: r.order_status || "—",
+          paymentStatus: r.payment_status ?? "—",
+        }));
+        setSalesRows(mapped);
+      } catch (e) {
+        console.error("[ReportTable] view_admin_sales_records:", e?.message || e);
+        setSalesRows([]);
+      } finally {
+        if (alive) setSalesLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [selectedOption, dateRange]);
 
-  const salesData = [
-    { orderID: "ORD-5012", buyerName: "Ana Reyes", productName: "Fresh Eggs", variant: "Medium", quantity: 10, pricePerTray: 150, totalAmount: 1500, orderDate: "10/05/25", fulfillmentDate: "10/06/25", orderStatus: "Delivered", paymentStatus: "Completed" },
-    { orderID: "ORD-5013", buyerName: "Carlo Santos", productName: "Brown Eggs", variant: "Large", quantity: 5, pricePerTray: 180, totalAmount: 900, orderDate: "10/08/25", fulfillmentDate: "10/09/25", orderStatus: "Pending", paymentStatus: "Pending" },
-  ];
-
-  // 🔹 Headers map (unchanged)
+  // Headers map (unchanged)
   const headerMap = {
     "Payout History": ["Payout ID", "Seller Name", "Amount", "Request Date", "Processed Date", "Status"],
     "Sales Records": ["Order ID", "Buyer Name", "Product Name", "Size", "Quantity Sold", "Price per tray", "Total Amount", "Order Date", "Fulfillment Date", "Order Status", "Payment Status"],
@@ -106,54 +195,92 @@ export default function ReportTable({ selectedOption }) {
     "Egg Production": ["Egg Production ID", "Farmer Name", "Flock ID", "Production Date", "Size", "Total Eggs", "Sellable Eggs", "Reject Eggs", "Notes", "Created"],
   };
 
-  // 🔹 Select headers & data based on selected option (UI unchanged)
-  let headers = [];
-  let data = [];
+  // Source data by tab
+  const sourceData = useMemo(() => {
+    switch (selectedOption) {
+      case "Payout History":
+        return payoutLoading
+          ? [
+              {
+                payoutID: "Loading…",
+                sellerName: "",
+                amount: "",
+                requestDate: "",
+                processDate: "",
+                status: "",
+              },
+            ]
+          : payoutRows;
+      case "Sales Records":
+        return salesLoading
+          ? [
+              {
+                orderID: "Loading…",
+                buyerName: "",
+                productName: "",
+                variant: "",
+                quantity: "",
+                pricePerTray: "",
+                totalAmount: "",
+                orderDate: "",
+                fulfillmentDate: "",
+                orderStatus: "",
+                paymentStatus: "",
+              },
+            ]
+          : salesRows;
+      case "Transaction Records":
+        return [];
+      case "Egg Stock":
+        return batchLoading
+          ? [{ batchID: "Loading…", farmerName: "", productID: "", eggQuantity: "", dateCollected: "", expiryDate: "", size: "", sold: "", created: "" }]
+          : batchRows;
+      case "Egg Production":
+        return eggLoading
+          ? [{ productionID: "Loading…", farmerName: "", flockID: "", productionDate: "", size: "", totalEggs: "", sellableEggs: "", rejectEggs: "", notes: "", created: "" }]
+          : eggRows;
+      default:
+        return [];
+    }
+  }, [selectedOption, payoutRows, salesRows, batchRows, eggRows, payoutLoading, salesLoading, batchLoading, eggLoading]);
 
-  switch (selectedOption) {
-    case "Payout History":
-      headers = headerMap["Payout History"];
-      data = payoutData;
-      break;
-    case "Sales Records":
-      headers = headerMap["Sales Records"];
-      data = salesData;
-      break;
-    case "Transaction Records":
-      headers = headerMap["Transaction Records"];
-      data = []; // unchanged placeholder
-      break;
-    case "Egg Stock":
-      headers = headerMap["Egg Stock"];
-      data = batchLoading
-        ? [{ batchID: "Loading…", farmerName: "", productID: "", eggQuantity: "", dateCollected: "", expiryDate: "", size: "", sold: "", created: "" }]
-        : batchRows;
-      break;
-    case "Egg Production":
-      headers = headerMap["Egg Production"];
-      data = eggLoading
-        ? [{ productionID: "Loading…", farmerName: "", flockID: "", productionDate: "", size: "", totalEggs: "", sellableEggs: "", rejectEggs: "", notes: "", created: "" }]
-        : eggRows;
-      break;
-    default:
-      headers = [];
-      data = [];
-  }
+  // Is current tab loading?
+  const isLoading =
+    (selectedOption === "Payout History" && payoutLoading) ||
+    (selectedOption === "Sales Records" && salesLoading) ||
+    (selectedOption === "Egg Stock" && batchLoading) ||
+    (selectedOption === "Egg Production" && eggLoading);
+
+  // Paginated data (10 per page, except while loading)
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil((sourceData?.length || 0) / PAGE_SIZE));
+  }, [sourceData]);
+
+  // If page exceeds total after data changes, clamp to last page
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
+
+  const pageStart = (page - 1) * PAGE_SIZE;
+  const visibleData = isLoading ? sourceData : (sourceData || []).slice(pageStart, pageStart + PAGE_SIZE);
+
+  // Select headers for current tab
+  const headers = headerMap[selectedOption] || [];
 
   return (
     <div className="[&_thead_th]:text-base [&_thead_th]:py-1 [&_thead_tr]:h-9 [&_thead_th]:font-bold">
       <Table headers={headers}>
-        {data.map((item, index) => (
+        {visibleData.map((item, index) => (
           <tr key={index} className="bg-[#faf4df] text-gray-700 rounded-lg shadow-sm">
-            {/* Payout History */}
+            {/* Payout History (Approved only) */}
             {selectedOption === "Payout History" && (
               <>
                 <td className="px-4 py-3 text-center font-medium ">{item.payoutID}</td>
                 <td className="px-4 py-3 text-center">{item.sellerName}</td>
-                <td className="px-4 py-3 text-center">₱{item.amount.toLocaleString()}</td>
+                <td className="px-4 py-3 text-center">₱{item.amount?.toLocaleString?.() ?? item.amount}</td>
                 <td className="px-4 py-3 text-center">{item.requestDate}</td>
                 <td className="px-4 py-3 text-center">{item.processDate}</td>
-                <td className={`px-4 py-3 text-center font-medium ${item.status === "Approved" ? "text-green-600" : item.status === "Pending" ? "text-yellow-500" : "text-red-500"}`}>{item.status}</td>
+                <td className="px-4 py-3 text-center font-medium text-green-600">Approved</td>
               </>
             )}
 
@@ -188,7 +315,7 @@ export default function ReportTable({ selectedOption }) {
               </>
             )}
 
-            {/* Egg Stock (now powered by RPC) */}
+            {/* Egg Stock */}
             {selectedOption === "Egg Stock" && (
               <>
                 <td className="px-4 py-3 text-center font-medium">{item.batchID}</td>
@@ -203,7 +330,7 @@ export default function ReportTable({ selectedOption }) {
               </>
             )}
 
-            {/* Egg Production (powered by RPC) */}
+            {/* Egg Production */}
             {selectedOption === "Egg Production" && (
               <>
                 <td className="px-4 py-3 text-center font-medium">{item.productionID}</td>
@@ -221,6 +348,58 @@ export default function ReportTable({ selectedOption }) {
           </tr>
         ))}
       </Table>
+
+      {/* Pagination */}
+      {!isLoading && (
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            Showing{" "}
+            <span className="font-medium">
+              {sourceData.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+            </span>{" "}
+            to{" "}
+            <span className="font-medium">
+              {Math.min((page - 1) * PAGE_SIZE + PAGE_SIZE, sourceData.length)}
+            </span>{" "}
+            of <span className="font-medium">{sourceData.length}</span> results
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1 rounded-md border text-sm disabled:opacity-50"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >
+              Prev
+            </button>
+
+            {/* Numbered pages (compact) */}
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5)
+                .map((p) => (
+                  <button
+                    key={p}
+                    className={`px-3 py-1 rounded-md border text-sm ${
+                      p === page ? "bg-primaryYellow text-white border-primaryYellow" : ""
+                    }`}
+                    onClick={() => setPage(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+            </div>
+
+            <button
+              className="px-3 py-1 rounded-md border text-sm disabled:opacity-50"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+// parent container
 // 2ND CODE (date range copied from FIRST CODE)
 import React, { useState } from "react";
 import ReportTable from "../../../components/admin/tables/ReportTable";
@@ -74,7 +75,8 @@ export default function Reports() {
 
       {/* Table Section */}
       <div className="p-6 rounded-lg border border-gray-200 shadow-lg">
-        <ReportTable selectedOption={selectedOption} />
+        {/* ⬇️ Forward the dateRange just like in FIRST CODE */}
+        <ReportTable selectedOption={selectedOption} dateRange={dateRange} />
       </div>
     </div>
   );
