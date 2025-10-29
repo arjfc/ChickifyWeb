@@ -96,6 +96,7 @@ export const sidebarItems = [
     roles: ["admin"],
     children: [
       { label: "Feed Monitoring", path: { admin: "/admin/expenses/feed-monitoring" } },
+      { label: "Feed Entry", path: { admin: "/admin/expenses/feed-entry" },},
       { label: "Business",        path: { admin: "/admin/expenses/business" } },
       { label: "Expense", path: { admin: "/admin/expenses/expense" },},
     ],
@@ -107,7 +108,7 @@ export const sidebarItems = [
     roles: ["admin"],
   },
   {
-    label: "Complaints",
+    label: "Refunds",
     path: { admin: "/admin/complaints" },
     icon: IoMdMegaphone,
     roles: ["admin"],

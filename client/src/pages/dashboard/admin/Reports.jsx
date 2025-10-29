@@ -1,26 +1,43 @@
+// parent container
+// 2ND CODE (date range copied from FIRST CODE)
 import React, { useState } from "react";
-import { MdKeyboardArrowDown } from "react-icons/md";
-import { IoFilterSharp } from "react-icons/io5";
 import ReportTable from "../../../components/admin/tables/ReportTable";
-import { DatePicker } from "@mui/x-date-pickers";
+import { LuCalendar } from "react-icons/lu";
 
 export default function Reports() {
-  const options = ["Payout History", "Seller Sales", "Transaction Records"];
+  const options = [
+    "Payout History",
+    "Sales Records",
+    "Transaction Records",
+    "Egg Stock",
+    "Egg Production",
+  ];
+
   const [selectedOption, setSelectedOption] = useState("Payout History");
 
-  const [value, onChange] = useState(new Date());
+  // 🔽 Copied date-range state + options from FIRST CODE
+  const [dateRange, setDateRange] = useState("all");
+  const dateOptions = [
+    { value: "all", label: "All time" },
+    { value: "today", label: "Today" },
+    { value: "yesterday", label: "Yesterday" },
+    { value: "7", label: "Last 7 days" },
+    { value: "30", label: "Last 30 days" },
+    { value: "last_month", label: "Last month" },
+  ];
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-row justify-between">
-        <div className="flex flex-row justify-between items-center border-b border-gray-300 gap-5">
+      {/* Tabs (line ends after Egg Production) */}
+      <div className="flex flex-row justify-between items-center">
+        <div className="flex flex-row items-center gap-9 border-b border-gray-300 flex-grow-0">
           {options.map((data) => (
             <div
               key={data}
               onClick={() => setSelectedOption(data)}
-              className={`text-fluid-lg font-semibold px-4 py-2 cursor-pointer transition-colors duration-200 ${
+              className={`text-lg font-semibold cursor-pointer transition-colors duration-200 pb-2 ${
                 selectedOption === data
-                  ? "text-primaryYellow font-semibold border-b-4 border-primaryYellow"
+                  ? "text-primaryYellow border-b-4 border-primaryYellow"
                   : "text-gray-400"
               }`}
             >
@@ -29,37 +46,37 @@ export default function Reports() {
           ))}
         </div>
 
-        <div className="flex flex-row justify-between items-center gap-5">
-          <div
-            onClick={() => {}}
-            className="flex gap-3 font-medium rounded-lg px-5 py-3 cursor-pointer hover:opacity-90 border border-gray-400 text-gray-400"
-          >
-            <IoFilterSharp
-              onClick={() => alert("clicked")}
-              className="text-lg"
-            />
+        {/* Date + Button (not underlined) */}
+        <div className="flex flex-row items-center gap-4">
+          {/* 🔽 Replaced MUI DatePicker with the same dropdown from FIRST CODE */}
+          <div className="flex items-center gap-2 border border-gray-300 shadow-sm rounded-md px-2 py-2">
+            <LuCalendar className="text-gray-600" />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="bg-transparent outline-none text-sm text-gray-700"
+            >
+              {dateOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
-          <DatePicker
-            label="Filter by Date"
-            onChange={(newValue) => onChange(newValue)}
-            slotProps={{
-              textField: {
-                size: "small",
-                sx: { width: 200 }, 
-              },
-            }}
-          />
+
           <div
-            onClick={() => alert("clicked")}
-            className="bg-primaryYellow cursor-pointer text-white text-lg font-bold rounded-lg px-5 py-2"
+            onClick={() => alert("Generate Report clicked")}
+            className="cursor-pointer bg-primaryYellow text-white text-base font-semibold rounded-lg px-4 py-2"
           >
             Generate Report
           </div>
         </div>
       </div>
 
+      {/* Table Section */}
       <div className="p-6 rounded-lg border border-gray-200 shadow-lg">
-        <ReportTable selectedOption={selectedOption} />
+        {/* ⬇️ Forward the dateRange just like in FIRST CODE */}
+        <ReportTable selectedOption={selectedOption} dateRange={dateRange} />
       </div>
     </div>
   );

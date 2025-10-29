@@ -19,7 +19,6 @@
 
 // export { supabase };
 
-
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -30,13 +29,12 @@ const supabaseKey =
 if (!supabaseUrl || !supabaseKey) {
   console.error(
     "[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY/PUBLISHABLE_KEY. " +
-    "Add them to client/.env.local and restart the dev server."
+      "Add them to client/.env.local and restart the dev server."
   );
 }
 
 // guard for SSR/build tools (Vite dev is in browser, but just in case)
-const storage =
-  typeof window !== "undefined" ? window.localStorage : undefined;
+const storage = typeof window !== "undefined" ? window.localStorage : undefined;
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {

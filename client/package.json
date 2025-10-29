@@ -12,6 +12,8 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@mantine/core": "^8.3.4",
+    "@mantine/hooks": "^8.3.4",
     "@mui/material": "^7.3.1",
     "@mui/x-date-pickers": "^8.10.2",
     "@supabase/supabase-js": "^2.58.0",
