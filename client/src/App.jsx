@@ -23,6 +23,7 @@ import AdminUserView from "./components/admin/users/ViewAdmin";
 import AdminUserEdit from "./components/admin/users/EditAdmin";
 import NotificationsPage from "./components/NotificationsPage";
 import SuspiciousActivities from "./pages/dashboard/super-admin/SuspiciousActivities";
+import Remittance from "./pages/dashboard/super-admin/Remittance";
 import PriceManagement from "./pages/dashboard/admin/PriceManagement";
 import EggInventory from "./pages/dashboard/admin/EggInventory";
 import FeedMonitoring from "./pages/dashboard/admin/FeedMonitoring";
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="orders" element={<Orders />} />
               <Route path="product-management" element={<ProductManagement />} />
               <Route path="pricing" element={<PricingManagement />} />
+              <Route path="remittance" element={<Remittance />} />
               <Route path="activity-logs" element={<ActivityLogs />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />

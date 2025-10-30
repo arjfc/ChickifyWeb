@@ -84,6 +84,7 @@ export default function DashboardLayout() {
     "/super-admin/product-management": "Product Management",
     "/super-admin/orders": "Orders",
     "/super-admin/pricing": "Pricing Management",
+    "/super-admin/remittance": "Remittance",
     "/super-admin/activity-logs": "Activity Logs",
     "/super-admin/reports": "Fees Reports",
     "/super-admin/settings": "Account Settings",
