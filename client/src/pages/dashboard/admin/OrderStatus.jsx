@@ -9,6 +9,8 @@ import EggSupplyTable from "../../../components/admin/tables/EggSupplyTable";
 import EggAllocationHistory from "../../../components/admin/tables/OrderAllocation";
 import EggAllocation from "../../../components/admin/tables/EggAllocation";
 import SelectedOrderCard from "../../../components/admin/tables/SelectedOrderCard";
+import TruckingTable from "@/components/admin/tables/TruckingTable";
+import AddDriverModal from "@/components/admin/modals/AddTruckingDriverModals";
 
 import { getOrderStatusCounts, adminMarkOrderToShip } from "@/services/OrderNAllocation";
 
@@ -31,6 +33,64 @@ const STATUS_LABEL_TO_DB = {
   Refunded: "Refunded",
 };
 const mapStatusForDB = (label) => STATUS_LABEL_TO_DB[label] ?? null;
+
+const mockDrivers = [
+  {
+    tracking_profile_id: 1,
+    name: "John Michael Santos",
+    company_name: "AgroSwift Logistics",
+    truck_number: "TRK-001",
+    phone_number: "09171234567",
+    plate_number: "ABC-1234",
+    is_active: true,
+    schedule: "2025-11-18T08:00:00Z",
+    nextSchedule: "2025-11-18T08:00:00Z",
+  },
+  {
+    tracking_profile_id: 2,
+    name: "Ricardo D. Mendoza",
+    company_name: "GreenRoad Transport",
+    truck_number: "TRK-212",
+    phone_number: "09981234567",
+    plate_number: "DDD-9811",
+    is_active: false,
+    schedule: "2025-11-12T13:00:00Z",
+    nextSchedule: "2025-11-20T13:30:00Z",
+  },
+  {
+    tracking_profile_id: 3,
+    name: "Alvin P. Villanueva",
+    company_name: "AgroSwift Logistics",
+    truck_number: "TRK-019",
+    phone_number: "09182345678",
+    plate_number: "XYZ-5588",
+    is_active: true,
+    schedule: "2025-11-20T13:00:00Z",
+    nextSchedule: "2025-11-17T10:15:00Z",
+  },
+  {
+    tracking_profile_id: 4,
+    name: "Mark Joseph Reyes",
+    company_name: "RoadMaster Delivery",
+    truck_number: "TRK-340",
+    phone_number: "09091239888",
+    plate_number: "QWE-4400",
+    is_active: true,
+    schedule: "2025-11-18T09:45:00Z",
+    nextSchedule: "2025-11-21T09:45:00Z",
+  },
+  {
+    tracking_profile_id: 5,
+    name: "Leo A. Dizon",
+    company_name: "GreenRoad Transport",
+    truck_number: "TRK-099",
+    phone_number: "09381237654",
+    plate_number: "GGG-7777",
+    is_active: false,
+    schedule: "2025-11-15T15:00:00Z",
+    nextSchedule: "2025-11-19T15:00:00Z",
+  },
+];
 
 export default function OrderStatus() {
   const navigate = useNavigate();
@@ -61,6 +121,7 @@ export default function OrderStatus() {
   const selectionMode = useMemo(() => {
     if (selectedTab === "Confirmed") return "multi";
     if (selectedTab === "To Ship") return "single";
+    if (selectedTab === "Shipped") return "multi"; 
     return "none";
   }, [selectedTab]);
 
@@ -94,6 +155,8 @@ export default function OrderStatus() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedStatusType, setSelectedStatusType] = useState("On delivery");
   const [confirmationModal, setConfirmationModal] = useState(false);
+  const [openAddDriver, setOpenAddDriver] = useState(false);
+
   const handleSelect = (type) => { setSelectedStatusType(type); setIsDropdownOpen(false); };
   function handleUpdateModal() { setIsUpdateModal(!updateModal); }
   function handleUpdateStatus() { setIsUpdateModal(false); setConfirmationModal(true); }
@@ -173,34 +236,51 @@ export default function OrderStatus() {
         />
       </div>
 
+      {/* Show drivers table only when status is "Shipped" */}
+      {selectedTab === "Shipped" && (
+        <TruckingTable
+          rows={mockDrivers}
+          onAddDriver={() => setOpenAddDriver(true)}
+          onSelectionChange={(ids) => {
+            console.log("Selected driver IDs:", ids);
+          }}
+        />
+      )}
+
+
       {/* Selected order card (only in To Ship tab) */}
       {selectedOrderId && <SelectedOrderCard orderId={selectedOrderId} />}
 
       {/* Egg Supply table */}
-      <EggSupplyTable 
-        onSelectedRowsChange={setSupplySelection}
-        autoFilterOrderId={selectedOrderId}
-      />
+      {selectedTab === "To Ship" && (
+        <>
+        <EggSupplyTable 
+          onSelectedRowsChange={setSupplySelection}
+          autoFilterOrderId={selectedOrderId}
+        />
 
-      {/* Allocate button */}
-      <div className="flex justify-end">
-        <button
-          className={`rounded-lg px-5 py-2 text-white font-semibold transition-all ${
-            canOpenAlloc ? "bg-primaryYellow hover:opacity-90 hover:shadow-lg" : "bg-gray-300 cursor-not-allowed"
-          }`}
-          disabled={!canOpenAlloc}
-          onClick={() => setOpenAlloc(true)}
-        >
-          {selectedTab !== "To Ship" 
-            ? "Select a 'To Ship' order first"
-            : selectedIds.length !== 1
-            ? "Select exactly one order"
-            : supplySelection.length === 0
-            ? "Select egg supply to allocate"
-            : `Allocate ${supplySelection.length} source${supplySelection.length > 1 ? 's' : ''}`
-          }
-        </button>
-      </div>
+        {/* Allocate button */}
+        <div className="flex justify-end">
+          <button
+            className={`rounded-lg px-5 py-2 text-white font-semibold transition-all ${
+              canOpenAlloc ? "bg-primaryYellow hover:opacity-90 hover:shadow-lg" : "bg-gray-300 cursor-not-allowed"
+            }`}
+            disabled={!canOpenAlloc}
+            onClick={() => setOpenAlloc(true)}
+          >
+            {selectedTab !== "To Ship" 
+              ? "Select a 'To Ship' order first"
+              : selectedIds.length !== 1
+              ? "Select exactly one order"
+              : supplySelection.length === 0
+              ? "Select egg supply to allocate"
+              : `Allocate ${supplySelection.length} source${supplySelection.length > 1 ? 's' : ''}`
+            }
+          </button>
+        </div>
+        </>
+      )}
+
 
       {/* Allocation modal */}
       {openAlloc && (
@@ -218,8 +298,30 @@ export default function OrderStatus() {
         />
       )}
 
+
+
       {/* Allocation history */}
       <EggAllocationHistory orderId={selectedIds[0] || null} reloadKey={reloadKey} />
+
+      {/* Add Driver Modal */}
+      <AddDriverModal
+        isOpen={openAddDriver}
+        onClose={() => setOpenAddDriver(false)}
+        onSubmit={(formData) => {
+          console.log("NEW DRIVER:", formData);
+
+          // Append to mock or later to API
+          mockDrivers.push({
+            tracking_profile_id: Date.now(),
+            ...formData,
+            schedule: null,
+            nextSchedule: null,
+          });
+
+          setOpenAddDriver(false);
+        }}
+      />
+
 
       {/* Demo modals */}
       <Modal

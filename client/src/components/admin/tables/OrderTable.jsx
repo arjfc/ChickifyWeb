@@ -342,14 +342,14 @@ export default function OrderTable({
               <div className="flex flex-row gap-5">
                 <div className="border-2 p-5 rounded-lg w-full">
                   <div className="flex flex-col gap-3">
-                    <h1 className="text-xl text-primaryYellow font-bold mb-5">Item Summary</h1>
+                    <h1 className="text-lg text-primaryYellow font-bold mb-5">Item Summary</h1>
                     <div className="text-gray-500">(Attach order items from RPC when available)</div>
                   </div>
                 </div>
 
                 <div className="border-2 p-5 rounded-lg w-full">
                   <div className="flex flex-col gap-2">
-                    <h1 className="text-xl text-primaryYellow font-bold mb-5">Order Summary</h1>
+                    <h1 className="text-lg text-primaryYellow font-bold mb-5">Order Summary</h1>
                     <div className="flex flex-row justify-between items-center font-bold text-lg">
                       <p>Total Order</p>
                       <p>₱{modalData.totalAmount}</p>
