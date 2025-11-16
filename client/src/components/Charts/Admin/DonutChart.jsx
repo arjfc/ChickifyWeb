@@ -1,7 +1,7 @@
 // components/Charts/Admin/DonutChart.jsx
 import { Doughnut } from "react-chartjs-2";
 import "chart.js/auto";
-import { MdKeyboardArrowRight } from "react-icons/md";
+import { MdKeyboardArrowRight, MdTrendingUp, MdTrendingDown } from "react-icons/md";
 
 const doughnutOptions = {
   responsive: true,
@@ -9,7 +9,7 @@ const doughnutOptions = {
   plugins: { legend: { position: "bottom" } },
 };
 
-export default function DonutChart({ data }) {
+export default function DonutChart({ data, trend = 0 }) {
   // debug
   console.log("[DonutChart] data:", data);
 
@@ -28,13 +28,33 @@ export default function DonutChart({ data }) {
     ],
   };
 
+  const positive = trend >= 0;
+  const pillCls = positive
+    ? "bg-green-100 text-green-700"
+    : "bg-red-100 text-red-700";
+
   return (
     <div className="w-full h-full flex flex-col">
       <div className="flex flex-col">
         <h1 className="font-bold text-2xl">Order Status</h1>
+
+        {/* replaced "View More" with ONE pill, same wrapper classes kept */}
         <div className="flex flex-row gap-2 items-center text-gray-400 cursor-pointer">
-          <p className="text-base">View More</p>
-          <MdKeyboardArrowRight className="w-5 h-5" />
+          <div className={`flex items-center gap-1 px-2.5 mt-1 py-1 rounded-md text-xs font-semibold ${pillCls}`}>
+            {positive ? (
+              <MdTrendingUp className="w-4 h-4" />
+            ) : (
+              <MdTrendingDown className="w-4 h-4" />
+            )}
+            <span>
+              {positive ? "+" : "-"}
+              {Math.abs(Math.round(trend))}%
+            </span>
+          </div>
+
+          {/* keeping the existing import is harmless; remove arrow visually if you want
+              or leave it commented to preserve UI structure */}
+          {/* <MdKeyboardArrowRight className="w-5 h-5" /> */}
         </div>
       </div>
 

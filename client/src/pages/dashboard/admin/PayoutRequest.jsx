@@ -3,7 +3,7 @@ import PayoutReqTable from "../../../components/admin/tables/PayoutReqTable";
 import { LuCalendar } from "react-icons/lu";
 
 export default function PayoutRequest() {
-  const options = ["Pending", "Approved", "Rejected"];
+  const options = ["Pending", "Approved"];
   const [selectedOption, setSelectedOption] = useState("Pending");
 
   // ⬇️ Copied date range state + options from FIRST CODE

@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from "react";
 import dayjs from "dayjs";
 import Table from "../../Table";
 import { fetchActivityLogs } from "@/services/activityLogs";
 
-export default function LogsTable({ selectedOption, type, dateRange }) {
+// PDF libs
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+const LogsTable = forwardRef(function LogsTable({ selectedOption, type, dateRange }, ref) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  console.log("Date Range: ", dateRange)
 
   useEffect(() => {
     let off = false;
@@ -60,9 +63,7 @@ export default function LogsTable({ selectedOption, type, dateRange }) {
         !selectedOption || selectedOption === "All"
           ? true
           : (r.actor_role || "").toLowerCase() === selectedOption.toLowerCase();
-
       const dateMatch = inRange(r.created_at, dateRange);
-
       return roleMatch && dateMatch;
     });
   }, [rows, selectedOption, dateRange]);
@@ -77,6 +78,89 @@ export default function LogsTable({ selectedOption, type, dateRange }) {
       minute: "numeric",
       hour12: true,
     });
+
+  // ===== Unicode font (optional, keeps consistency with other exports) =====
+  const FONT_NAME = "NotoSans";
+  const FONT_FILE = "NotoSans-Regular.ttf";
+  const FONT_URL = "/fonts/NotoSans-Regular.ttf"; // put TTF in public/fonts/
+
+  const arrayBufferToBase64 = (buffer) => {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+
+  const ensureUnicodeFont = async (doc) => {
+    try {
+      const res = await fetch(FONT_URL);
+      if (!res.ok) throw new Error(`Font fetch failed (${res.status})`);
+      const buf = await res.arrayBuffer();
+      const base64 = arrayBufferToBase64(buf);
+      doc.addFileToVFS(FONT_FILE, base64);
+      doc.addFont(FONT_FILE, FONT_NAME, "normal");
+      doc.setFont(FONT_NAME, "normal");
+      return true;
+    } catch (e) {
+      console.warn("[LogsTable] Unicode font not loaded:", e?.message || e);
+      return false;
+    }
+  };
+
+  // ===== Expose export API =====
+  useImperativeHandle(ref, () => ({
+    async exportPdf(meta = {}) {
+      const {
+        title = "Chickify Activity Logs",
+        subtitle = `${selectedOption} • ${type} • ${dateRange}`,
+        filename = `activity_logs_${selectedOption}_${type}_${dateRange}.pdf`,
+      } = meta;
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+      const hasUnicode = await ensureUnicodeFont(doc);
+
+      const marginX = 40;
+      let cursorY = 40;
+
+      // Title
+      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text(title, marginX, cursorY);
+      cursorY += 22;
+
+      // Subtitle
+      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+      doc.setFontSize(12);
+      doc.text(subtitle, marginX, cursorY);
+      cursorY += 12;
+
+      // Build body from filtered rows
+      const body = (filtered || []).map((r) => [
+        fmt(r.created_at),
+        r.actor_user ?? "(no name)",
+        r.actor_role ?? "—",
+        r.action_type ?? "—",
+        r.order_id ?? "—",
+        r.description ?? "",
+      ]);
+
+      autoTable(doc, {
+        startY: cursorY + 8,
+        head: [headers],
+        body,
+        styles: { font: hasUnicode ? FONT_NAME : "helvetica", fontSize: 9, cellPadding: 4, halign: "center" },
+        headStyles: { fillColor: [255, 210, 77], textColor: [33, 33, 33] },
+        didDrawPage: () => {
+          const pageSize = doc.internal.pageSize;
+          const pageHeight = pageSize.height || pageSize.getHeight();
+          doc.setFontSize(10);
+          doc.text(`Page ${doc.getNumberOfPages()}`, marginX, pageHeight - 20);
+        },
+      });
+
+      doc.save(filename);
+    },
+  }));
 
   if (loading) return <div className="text-center py-6">Loading logs…</div>;
 
@@ -115,5 +199,6 @@ export default function LogsTable({ selectedOption, type, dateRange }) {
       </table>
     </div>
   );
+});
 
-}
+export default LogsTable;
