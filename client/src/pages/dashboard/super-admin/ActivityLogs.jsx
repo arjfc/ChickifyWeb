@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import LogsTable from "@/components/super-admin/tables/LogsTable";
 import TrackUserTable from "@/components/super-admin/tables/TrackUserLoginTable";
 import { BsGrid } from "react-icons/bs";
@@ -39,9 +39,38 @@ export default function ActivityLogs() {
     })();
   }, []);
 
+  // ⬇️ NEW: refs to trigger child PDF exports
+  const activityRef = useRef(null);
+  const signinsRef = useRef(null);
+
+  const handleGenerateActivityPdf = async () => {
+    try {
+      await activityRef.current?.exportPdf({
+        title: "Chickify Activity Logs",
+        subtitle: `${selectedAdminOption} • ${selectedType} • ${dateOptions.find(d => d.value === dateRange)?.label ?? dateRange}`,
+        filename: `activity_logs_${selectedAdminOption}_${selectedType}_${dateRange}.pdf`,
+      });
+    } catch (e) {
+      console.error("Activity Logs PDF export failed:", e);
+      alert("Failed to generate Activity Logs PDF.");
+    }
+  };
+
+  const handleGenerateSigninsPdf = async () => {
+    try {
+      await signinsRef.current?.exportPdf({
+        title: "Chickify Track Last Sign-ins",
+        subtitle: `${loginRole} • ${dateOptions.find(d => d.value === loginDateRange)?.label ?? loginDateRange}`,
+        filename: `user_signins_${loginRole}_${loginDateRange}.pdf`,
+      });
+    } catch (e) {
+      console.error("User Logs PDF export failed:", e);
+      alert("Failed to generate User Logs PDF.");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
-
       {/* =================== Activity Logs =================== */}
       <div className="flex items-center bg-softPrimaryYelllow p-2 rounded-xl">
         <div className="flex gap-2">
@@ -100,7 +129,7 @@ export default function ActivityLogs() {
 
         {/* Right: button */}
         <button
-          onClick={() => alert("clicked")}
+          onClick={handleGenerateActivityPdf}
           className="cursor-pointer bg-primaryYellow text-white text-sm font-semibold rounded-lg px-4 py-2"
         >
           Generate Activity Logs Report
@@ -108,6 +137,7 @@ export default function ActivityLogs() {
       </div>
 
       <LogsTable
+        ref={activityRef}
         selectedOption={selectedAdminOption}
         type={selectedType}
         dateRange={dateRange}
@@ -152,7 +182,7 @@ export default function ActivityLogs() {
 
         {/* Right: button */}
         <button
-          onClick={() => alert("clicked")}
+          onClick={handleGenerateSigninsPdf}
           className="cursor-pointer bg-primaryYellow text-white text-sm font-semibold rounded-lg px-4 py-2"
         >
           Generate User Logs Report
@@ -160,6 +190,7 @@ export default function ActivityLogs() {
       </div>
 
       <TrackUserTable
+        ref={signinsRef}
         limit={15}
         userrole={loginRole}
         date={loginDateRange}

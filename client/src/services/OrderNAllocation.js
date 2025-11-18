@@ -177,6 +177,39 @@ export async function adminMarkOrderToShip(orderId, { actorId = null, roleId = n
   if (error) throw error;
 }
 
+/* -------------------------------------------------------------------------- */
+/* NEW: Delivered action — uses confirm_delivery_admin RPC                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Marks an order as Delivered and triggers all downstream postings
+ * handled by SQL (fees, batches, farmer earnings with source_id, etc.).
+ */
+// replace your adminMarkOrderDelivered with this version
+function formatSupabaseError(error) {
+  if (!error) return "Unknown error";
+  const parts = [error.message, error.details, error.hint].filter(Boolean);
+  return parts.join(" — ");
+}
+export async function adminMarkOrderDelivered(orderId) {
+  const oid = Number(orderId);
+  if (!oid) throw new Error("Invalid orderId");
+  const { data, error } = await supabase.rpc("confirm_delivery_admin", { p_order_id: oid });
+  if (error) throw new Error(formatSupabaseError(error));
+  return { ok: !!data };
+}
+
+// NEW: detailed batch helper used by the UI to surface each failure
+export async function adminMarkManyDeliveredDetailed(orderIds = []) {
+  const ids = (orderIds || []).map((x) => Number(x)).filter(Boolean);
+  const results = await Promise.allSettled(ids.map((id) => adminMarkOrderDelivered(id)));
+  return results.map((r, i) => {
+    if (r.status === "fulfilled") return { orderId: ids[i], ok: true, error: null };
+    const reason = r.reason instanceof Error ? r.reason.message : String(r.reason || "Unknown error");
+    return { orderId: ids[i], ok: false, error: reason };
+  });
+}
+
 export async function adminCreateAllocationBulk({
   orderId,
   sizeId,
@@ -202,10 +235,9 @@ export async function adminCreateAllocationBulk({
       throw new Error("Each detail needs eggs or trays");
     }
 
-    // backend accepts either eggs or trays; include only the one we intend
     const row = { supply_row_key: key };
     if (eggs != null) row.eggs = eggs;
-    else row.trays = trays; // only if eggs not provided
+    else row.trays = trays;
 
     return row;
   });
@@ -222,9 +254,7 @@ export async function adminCreateAllocationBulk({
   return data; // { created_ids: [...], warning: null|string }
 }
 
-/**
- * Optional convenience: allocate purely by eggs (you give per-row eggs).
- */
+/** Allocate purely by eggs (you give per-row eggs). */
 export async function adminCreateAllocationByEggs({
   orderId,
   sizeId,
@@ -287,119 +317,3 @@ export async function listAllocationGroups({
     topAllocStatus: r.top_alloc_status || null,
   }));
 }
-
-// /**
-//  * Grouped allocations (farmer + produced date) with client-side filters
-//  *
-//  * RPC filters:
-//  *  - orderId, farmerId, dateFrom, dateTo, defaultShelf
-//  *
-//  * Client-side filters:
-//  *  - minTrays, maxTrays
-//  *  - freshnessBuckets (["Fresh","Sell Soon","Expiring","Expired"])
-//  *  - includeSizes (["S","M",...]) -> keeps groups where ANY size in breakdown matches
-//  *
-//  * Sorting & paging similar to above:
-//  *  - sortBy: "produced" | "trays" | "eggs" | "daysToExpiry" | "topAllocStatus"
-//  *  - sortDir: "asc" | "desc"
-//  */
-// export async function listAllocationGroups({
-//   // server-side filters (RPC)
-//   orderId = null,
-//   farmerId = null,
-//   dateFrom = null,
-//   dateTo = null,
-//   defaultShelf = 21,
-
-//   // client-side filters
-//   minTrays = null,
-//   maxTrays = null,
-//   freshnessBuckets = null,   // e.g., ["Fresh","Expiring"]
-//   includeSizes = null,       // e.g., ["S","M"]
-
-//   // sorting & paging
-//   sortBy = "produced",
-//   sortDir = "asc",
-//   page = 1,
-//   pageSize = 20,
-// } = {}) {
-//   const { data, error } = await supabase.rpc("admin_view_order_allocation_grouped_live", {
-//     p_order_id: orderId ?? null,
-//     p_farmer_id: farmerId ?? null,
-//     p_date_from: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : null,
-//     p_date_to: dateTo ? new Date(dateTo).toISOString().slice(0, 10) : null,
-//     p_default_shelf: defaultShelf ?? 21,
-//   });
-//   if (error) throw error;
-
-//   let rows = (data || []).map((r) => ({
-//     farmerId: r.farmer_id,
-//     farmerName: r.farmer_name || r.farmer_id,
-//     produced: r.produced, // date
-//     sizeBreakdown: Array.isArray(r.size_breakdown)
-//       ? r.size_breakdown.map((x) => ({
-//           size: x.size,
-//           trays: Number(x.trays || 0),
-//           eggs: Number(x.eggs || 0),
-//         }))
-//       : [],
-//     totalTrays: Number(r.total_trays || 0),
-//     totalEggs: Number(r.total_eggs || 0),
-//     freshnessStatus: r.status,      // Fresh / Sell Soon / Expiring / Expired
-//     daysToExpiry: r.days_to_expiry, // int
-//     allocCount: Number(r.alloc_count || 0),
-//     statusCounts: r.status_counts || {},       // { pending: 2, confirmed: 1, ... }
-//     topAllocStatus: r.top_alloc_status || null // "pending"...
-//   }));
-
-//   // --- client-side filters ---
-//   if (minTrays != null) rows = rows.filter((r) => r.totalTrays >= Number(minTrays));
-//   if (maxTrays != null) rows = rows.filter((r) => r.totalTrays <= Number(maxTrays));
-
-//   if (Array.isArray(freshnessBuckets) && freshnessBuckets.length) {
-//     const set = new Set(freshnessBuckets.map((s) => String(s)));
-//     rows = rows.filter((r) => set.has(r.freshnessStatus));
-//   }
-
-//   if (Array.isArray(includeSizes) && includeSizes.length) {
-//     const set = new Set(includeSizes.map((s) => String(s).toUpperCase()));
-//     rows = rows.filter((r) =>
-//       (r.sizeBreakdown || []).some((s) => set.has(String(s.size || "").toUpperCase()))
-//     );
-//   }
-
-//   // --- sorting ---
-//   const cmpNum = (a, b, key) => (Number(a[key] ?? 0) - Number(b[key] ?? 0));
-//   const cmpDate = (a, b, key) => {
-//     const ta = a[key] ? new Date(a[key]).getTime() : 0;
-//     const tb = b[key] ? new Date(b[key]).getTime() : 0;
-//     return ta - tb;
-//   };
-//   const cmpStr = (a, b, key) => String(a[key] ?? "").localeCompare(String(b[key] ?? ""));
-
-//   rows.sort((a, b) => {
-//     let res = 0;
-//     switch (sortBy) {
-//       case "trays":        res = cmpNum(a, b, "totalTrays"); break;
-//       case "eggs":         res = cmpNum(a, b, "totalEggs");  break;
-//       case "daysToExpiry": res = cmpNum(a, b, "daysToExpiry"); break;
-//       case "topAllocStatus": res = cmpStr(a, b, "topAllocStatus"); break;
-//       default:             res = cmpDate(a, b, "produced");
-//     }
-//     return sortDir === "desc" ? -res : res;
-//   });
-
-//   // --- pagination ---
-//   const total = rows.length;
-//   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-//   const p = Math.max(1, Math.min(page, totalPages));
-//   const start = (p - 1) * pageSize;
-//   const end = Math.min(start + pageSize, total);
-
-//   return {
-//     rows: rows.slice(start, end),
-//     total,
-//     page: p,
-//     totalPages,
-//   };
-// }
