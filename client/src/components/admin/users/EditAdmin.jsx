@@ -164,11 +164,11 @@ export default function EditAdmin() {
   const [street, setStreet] = useState("");
   const [barangay, setBarangay] = useState("");
   const [city, setCity] = useState("");
-  const [province, setProvince] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [lat, setLat] = useState(null);
   const [lon, setLon] = useState(null);
+  const [province, setProvince] = useState("Cebu");
 
   if (!user) return <p>No user data provided</p>;
 
@@ -221,7 +221,7 @@ export default function EditAdmin() {
         setStreet(ap.street || "");
         setBarangay(ap.barangay || "");
         setCity(ap.city || "");
-        setProvince(ap.province || "");
+        setProvince(ap.province || "Cebu");   // 👈 here
         setPostalCode(ap.postalCode || "");
         setDeliveryNotes(ap.deliveryNotes || "");
         setLat(ap.lat ?? null);
