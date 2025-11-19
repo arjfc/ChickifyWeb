@@ -8,14 +8,18 @@ function assertNoError(error) {
 export async function getDashboardSummary() {
   const { data, error } = await supabase.rpc("rpc_dashboard_summary");
   if (error) throw error;
+
   // rpc returns a single-row table
   const row = Array.isArray(data) ? data[0] : data;
+
   return {
     total_active_users: row?.total_active_users ?? 0,
     total_sales_today:  row?.total_sales_today  ?? 0,
     total_egg_trays:    row?.total_egg_trays    ?? 0,
+    total_farmers:      row?.total_farmers      ?? 0,  // 👈 NEW
   };
 }
+
 
 /** Customer growth bars (uses your existing rpc_customer_growth) */
 export async function getCustomerGrowth(days = 30) {
@@ -106,3 +110,34 @@ export async function getTopProductAdmin(days = 30) {
   assertNoError(error);
   return data?.[0] ?? null; // { prod_id, prod_name, trays, revenue } or null
 }
+
+
+
+
+export async function getEggProductionTimeseries(days = 90) {
+  const { data, error } = await supabase.rpc(
+    "view_admin_egg_production_timeseries",
+    { p_days: days }
+  );
+
+  if (error) {
+    console.error("[getEggProductionTimeseries] RPC error:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    throw error;
+  }
+
+  const shaped = (data || []).map((row) => ({
+    d: row.production_date,
+    size_id: row.size_id,
+    size_description: row.size_description,
+    eggs: Number(row.total_eggs ?? 0),
+  }));
+
+  console.log("[egg-production] fetched:", shaped.length, "points", shaped);
+  return shaped;
+}
+
