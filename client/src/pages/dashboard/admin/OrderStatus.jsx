@@ -13,6 +13,7 @@ import TruckingTable from "@/components/admin/tables/TruckingTable";
 import AddDriverModal from "@/components/admin/modals/AddTruckingDriverModals";
 
 import { getOrderStatusCounts, adminMarkOrderToShip } from "@/services/OrderNAllocation";
+import { fetchDriverList } from "@/services/TruckingNAllocation";
 
 const modalBaseStyle = {
   content: {
@@ -33,64 +34,6 @@ const STATUS_LABEL_TO_DB = {
   Refunded: "Refunded",
 };
 const mapStatusForDB = (label) => STATUS_LABEL_TO_DB[label] ?? null;
-
-const mockDrivers = [
-  {
-    tracking_profile_id: 1,
-    name: "John Michael Santos",
-    company_name: "AgroSwift Logistics",
-    truck_number: "TRK-001",
-    phone_number: "09171234567",
-    plate_number: "ABC-1234",
-    is_active: true,
-    schedule: "2025-11-18T08:00:00Z",
-    nextSchedule: "2025-11-18T08:00:00Z",
-  },
-  {
-    tracking_profile_id: 2,
-    name: "Ricardo D. Mendoza",
-    company_name: "GreenRoad Transport",
-    truck_number: "TRK-212",
-    phone_number: "09981234567",
-    plate_number: "DDD-9811",
-    is_active: false,
-    schedule: "2025-11-12T13:00:00Z",
-    nextSchedule: "2025-11-20T13:30:00Z",
-  },
-  {
-    tracking_profile_id: 3,
-    name: "Alvin P. Villanueva",
-    company_name: "AgroSwift Logistics",
-    truck_number: "TRK-019",
-    phone_number: "09182345678",
-    plate_number: "XYZ-5588",
-    is_active: true,
-    schedule: "2025-11-20T13:00:00Z",
-    nextSchedule: "2025-11-17T10:15:00Z",
-  },
-  {
-    tracking_profile_id: 4,
-    name: "Mark Joseph Reyes",
-    company_name: "RoadMaster Delivery",
-    truck_number: "TRK-340",
-    phone_number: "09091239888",
-    plate_number: "QWE-4400",
-    is_active: true,
-    schedule: "2025-11-18T09:45:00Z",
-    nextSchedule: "2025-11-21T09:45:00Z",
-  },
-  {
-    tracking_profile_id: 5,
-    name: "Leo A. Dizon",
-    company_name: "GreenRoad Transport",
-    truck_number: "TRK-099",
-    phone_number: "09381237654",
-    plate_number: "GGG-7777",
-    is_active: false,
-    schedule: "2025-11-15T15:00:00Z",
-    nextSchedule: "2025-11-19T15:00:00Z",
-  },
-];
 
 export default function OrderStatus() {
   const navigate = useNavigate();
@@ -149,6 +92,36 @@ export default function OrderStatus() {
       setMarking(false);
     }
   };
+
+    // 🔹 DRIVERS STATE (for Shipped tab)
+  const [drivers, setDrivers] = useState([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [driversErr, setDriversErr] = useState(null);
+
+  useEffect(() => {
+    if (selectedTab !== "Shipped") return;
+
+    let alive = true;
+
+    async function loadDrivers() {
+      setLoadingDrivers(true);
+      setDriversErr(null);
+
+      try {
+        const data = await fetchDriverList({});
+        if (alive) setDrivers(data || []);
+      } catch (err) {
+        if (alive) setDriversErr(err.message || "Failed to load drivers.");
+      } finally {
+        if (alive) setLoadingDrivers(false);
+      }
+    }
+
+    loadDrivers();
+    return () => {
+      alive = false;
+    };
+  }, [selectedTab, reloadKey]);
 
   // demo modals
   const [updateModal, setIsUpdateModal] = useState(false);
@@ -238,13 +211,27 @@ export default function OrderStatus() {
 
       {/* Show drivers table only when status is "Shipped" */}
       {selectedTab === "Shipped" && (
-        <TruckingTable
-          rows={mockDrivers}
-          onAddDriver={() => setOpenAddDriver(true)}
-          onSelectionChange={(ids) => {
-            console.log("Selected driver IDs:", ids);
-          }}
-        />
+        <>
+          {driversErr && (
+            <div className="text-sm text-red-600 mb-2">
+              {driversErr}
+            </div>
+          )}
+
+          <TruckingTable
+            rows={drivers}
+            onAddDriver={() => setOpenAddDriver(true)}
+            onSelectionChange={(ids) => {
+              console.log("Selected driver IDs:", ids);
+            }}
+          />
+
+          {loadingDrivers && (
+            <div className="text-sm text-gray-500 mt-2">
+              Loading drivers…
+            </div>
+          )}
+        </>
       )}
 
 
@@ -389,6 +376,7 @@ export default function OrderStatus() {
     </div>
   );
 }
+
 // // pages/admin/OrderStatus.jsx
 // import React, { useEffect, useState, useMemo } from "react";
 // import { IoChevronDown } from "react-icons/io5";

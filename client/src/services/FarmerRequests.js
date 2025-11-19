@@ -74,3 +74,191 @@ export async function fetchFarmersForAdmin({ status = "approved", onlyActive = t
     ended_at: r.ended_at,
   }));
 }
+
+
+/**
+ * View specific farmer in this coop.
+ */
+  export async function fetchFarmerDetails(farmerId) {
+    const { data, error } = await supabase.rpc("admin_get_farmer_profile", {
+      p_farmer_id: farmerId,
+    });
+
+    if (error) throw error;
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+
+    return {
+      id: row.user_id,
+      name: row.full_name,
+      firstName: row.first_name || "",
+      middleName: row.middle_name || "",
+      lastName: row.last_name || "",
+      sex: (row.sex || "").trim().toLowerCase(),
+      phoneNumber: row.contact_no,
+      address: row.full_address,
+      addressParts: {
+        houseNumber: row.house_number,
+        street: row.street,
+        barangay: row.barangay,
+        city: row.city,
+        province: row.province,
+        postalCode: row.postal_code,
+        deliveryNotes: row.delivery_notes,
+        lat: row.latitude ?? null,
+        lon: row.longitude ?? null,
+      },
+      imgUrl: row.img_url,
+      permitUrl: row.permit_url,
+    };
+  }
+
+// export async function fetchFarmerDetails(farmerId) {
+//   const { data, error } = await supabase.rpc("admin_get_farmer_profile", {
+//     p_farmer_id: farmerId,
+//   });
+
+//   if (error) throw error;
+
+//   const row = Array.isArray(data) ? data[0] : data;
+//   if (!row) return null;
+
+//   return {
+//     id: row.user_id,
+//     name: row.full_name,
+//     sex: (row.sex || "").trim().toLowerCase(),  
+//     phoneNumber: row.contact_no,
+//     address: row.full_address,
+//     addressParts: {
+//       houseNumber: row.house_number,
+//       street: row.street,
+//       barangay: row.barangay,
+//       city: row.city,
+//       province: row.province,
+//       postalCode: row.postal_code,
+//       deliveryNotes: row.delivery_notes,
+//     },
+//     imgUrl: row.img_url,
+//     permitUrl: row.permit_url,
+//   };
+// }
+
+/**
+ * Update the details of the specific farmer in this coop.
+ * Except email which is immutable here.
+ */
+export async function adminUpdateFarmerProfile(payload) {
+  const {
+    id, // farmer user_id
+    firstName,
+    middleName,
+    lastName,
+    sex,
+    phoneNumber,
+    addressParts,
+  } = payload;
+
+  const {
+    houseNumber,
+    street,
+    barangay,
+    city,
+    province,
+    postalCode,
+    deliveryNotes,
+    lat,
+    lon,
+  } = addressParts || {};
+
+  const { error } = await supabase.rpc("admin_update_farmer_profile", {
+    p_farmer_id: id,
+    p_first_name: firstName,
+    p_middle_name: middleName ?? null,
+    p_last_name: lastName,
+    p_sex: sex,
+    p_contact_no: phoneNumber,
+    p_house_number: houseNumber,
+    p_street: street,
+    p_barangay: barangay,
+    p_city: city,
+    p_province: province,
+    p_postal_code: postalCode,
+    p_delivery_notes: deliveryNotes,
+    p_lat: lat ?? null,
+    p_lon: lon ?? null,
+  });
+
+  if (error) throw error;
+}
+// export async function adminUpdateFarmerProfile(payload) {
+//   const {
+//     id, // farmer user_id
+//     firstName,
+//     middleName,
+//     lastName,
+//     sex,
+//     phoneNumber,
+//     addressParts,
+//   } = payload;
+
+//   const { houseNumber, street, barangay, city, province, postalCode, deliveryNotes } =
+//     addressParts || {};
+
+//   const { error } = await supabase.rpc("admin_update_farmer_profile", {
+//     p_farmer_id: id,
+//     p_first_name: firstName,
+//     p_middle_name: middleName,
+//     p_last_name: lastName,
+//     p_sex: sex,
+//     p_contact_no: phoneNumber,
+//     p_house_number: houseNumber,
+//     p_street: street,
+//     p_barangay: barangay,
+//     p_city: city,
+//     p_province: province,
+//     p_postal_code: postalCode,
+//     p_delivery_notes: deliveryNotes,
+//   });
+
+//   if (error) throw error;
+// }
+
+// 
+
+export async function fetchFarmerPermit(farmerId) {
+  const { data, error } = await supabase.rpc("get_farmer_permit", {
+    p_farmer_id: farmerId,
+  });
+
+  if (error) {
+    console.error("get_farmer_permit error:", error);
+    throw error;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+
+  let path = row.permit_url || "";
+
+  if (/^https?:\/\//i.test(path)) {
+    const marker = "/business-permit/";
+    const idx = path.indexOf(marker);
+    if (idx !== -1) {
+      path = path.slice(idx + marker.length); // -> "permits/.../permit.jpg"
+    }
+  }
+
+  if (path) {
+    const { data: urlData } = supabase
+      .storage
+      .from("business-permit")          // 👈 bucket name
+      .getPublicUrl(path);              // 👈 relative path inside that bucket
+
+    row.permit_image_url = urlData?.publicUrl || null;
+  } else {
+    row.permit_image_url = null;
+  }
+
+  return row;
+}
