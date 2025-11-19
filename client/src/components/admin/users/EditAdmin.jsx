@@ -183,6 +183,7 @@ export default function EditAdmin() {
   }, [city]);
 
   const recomputeGeo = (cityName, barangayName) => {
+    console.log("recomputeGeo:", { cityName, barangayName });
     if (!cityName) {
       setLat(null);
       setLon(null);
