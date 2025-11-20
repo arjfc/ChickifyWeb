@@ -3,14 +3,23 @@ import React, { useMemo, useState } from "react";
 import "chart.js/auto";
 import { Line } from "react-chartjs-2";
 import { MdKeyboardArrowRight } from "react-icons/md";
+import { Link } from "react-router-dom";
 import { IoChevronDown } from "react-icons/io5";
 
 /**
- * props.data: Array<{ month_date: "YYYY-MM-DD", price: number, demand_tag: "in-demand"|"balanced"|"not-in-demand", note?: string }>
- * Example element:
+ * props:
+ *  - data: Array<{
+ *      month_date: "YYYY-MM-DD",
+ *      price: number,
+ *      demand_tag: "in-demand" | "balanced" | "not-in-demand",
+ *      note?: string
+ *    }>
+ *  - showViewMore?: boolean (default: true)
+ *
+ * Example element for data:
  * { month_date: "2025-01-01", price: 300, demand_tag: "balanced", note: "post-holiday normalization" }
  */
-export default function PriceForecastChart({ data = [] }) {
+export default function PriceForecastChart({ data = [], showViewMore = true }) {
   const [view, setView] = useState("monthly");
   const [isOpen, setIsOpen] = useState(false);
 
@@ -110,7 +119,7 @@ export default function PriceForecastChart({ data = [] }) {
     return { labels, values, pointColors, meta };
   }, [data]);
 
-  // Pick the view
+  // Pick the view (weekly or monthly)
   const series = view === "weekly" ? weeklySeries : monthlySeries;
 
   // Build chart.js dataset
@@ -141,10 +150,17 @@ export default function PriceForecastChart({ data = [] }) {
       <div className="flex flex-row justify-between items-center">
         <div className="flex flex-col gap-1">
           <h1 className="text-primaryYellow font-bold text-2xl">Price Forecasting</h1>
-          <div className="flex flex-row gap-2 items-center text-gray-400 cursor-pointer">
-            <p className="text-base">View More</p>
-            <MdKeyboardArrowRight className="w-5 h-5" />
-          </div>
+
+          {/* View More link – conditionally rendered */}
+          {showViewMore && (
+            <Link
+              to="/admin/price-forecast-analysis"
+              className="flex flex-row gap-2 items-center text-gray-500 cursor-pointer hover:text-yellow-600 transition-all"
+            >
+              <p className="text-base">View More</p>
+              <MdKeyboardArrowRight className="w-5 h-5" />
+            </Link>
+          )}
         </div>
 
         {/* View dropdown */}
@@ -155,7 +171,9 @@ export default function PriceForecastChart({ data = [] }) {
           >
             <span className="capitalize">{view}</span>
             <IoChevronDown
-              className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+              className={`transition-transform duration-200 ${
+                isOpen ? "rotate-180" : ""
+              }`}
             />
           </div>
 
@@ -188,13 +206,25 @@ export default function PriceForecastChart({ data = [] }) {
       {/* Legend for demand coloring */}
       <div className="flex gap-4 text-xs text-gray-600">
         <span className="inline-flex items-center gap-2">
-          <span className="inline-block w-3 h-3 rounded-full" style={{ background: "#198754" }} /> in-demand
+          <span
+            className="inline-block w-3 h-3 rounded-full"
+            style={{ background: "#198754" }}
+          />{" "}
+          in-demand
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="inline-block w-3 h-3 rounded-full" style={{ background: "#0d6efd" }} /> balanced
+          <span
+            className="inline-block w-3 h-3 rounded-full"
+            style={{ background: "#0d6efd" }}
+          />{" "}
+          balanced
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="inline-block w-3 h-3 rounded-full" style={{ background: "#dc3545" }} /> not-in-demand
+          <span
+            className="inline-block w-3 h-3 rounded-full"
+            style={{ background: "#dc3545" }}
+          />{" "}
+          not-in-demand
         </span>
       </div>
     </div>

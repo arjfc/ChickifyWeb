@@ -28,6 +28,7 @@ import FeedEntry from "./pages/dashboard/admin/FeedEntry";
 import Expense from "./pages/dashboard/admin/Expense";
 import Business from "./pages/dashboard/admin/Business";
 import Messages from "./pages/dashboard/admin/Messages";
+import PriceForecastAnalysis from "./pages/dashboard/admin/PriceForecastAnalysis";
 import NotFound from "./pages/404";
 import NoAccess from "./pages/NoAccess";
 
@@ -99,6 +100,7 @@ export default function App() {
               <Route path="reports" element={<AdminReports />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="notifications" element={<NotificationsPage />} />
+              <Route path="price-forecast-analysis" element={<PriceForecastAnalysis />}/>
             </Route>
           </Route>
 

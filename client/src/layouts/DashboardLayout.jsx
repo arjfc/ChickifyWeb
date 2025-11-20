@@ -113,6 +113,7 @@ export default function DashboardLayout() {
     "/admin/payout-request": "Payout Request",
     "/admin/reports": "Reports",
     "/admin/settings": "Account Settings",
+    "/admin/price-forecast-analysis": "Price Forecast Analysis",
   };
 
   const excludedPaths = [

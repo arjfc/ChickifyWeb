@@ -186,11 +186,12 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          
           <button
             onClick={() => setRemitOpen(true)}
-            className="mt-6 w-full rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95"
+            className="mt-auto w-full rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95"
           >
-            Remit
+            Submit Remittance
           </button>
         </div>
       </div>
@@ -217,13 +218,6 @@ export default function AdminDashboard() {
               <MdKeyboardArrowRight className="absolute top-3 right-3 w-8 h-8" />
             </div>
           ))}
-
-          <button
-            onClick={() => setRemitOpen(true)}
-            className="mt-auto w-full rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95"
-          >
-            Submit Remittance
-          </button>
         </div>
       </div>
 

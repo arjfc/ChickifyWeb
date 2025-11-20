@@ -276,7 +276,8 @@ export default function Reports() {
   const options = [
     "Payout History",
     "Sales Records",
-    "Transaction Records",
+    // "Transaction Records",
+    "Fees Collected",
     "Egg Stock",
     "Egg Production",
     "List of Farmers",
