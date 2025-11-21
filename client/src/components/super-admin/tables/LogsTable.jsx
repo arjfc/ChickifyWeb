@@ -190,8 +190,8 @@ const LogsTable = forwardRef(function LogsTable({ selectedOption, type, dateRang
                 <td className="px-4 py-3 text-center">{r.actor_user ?? "(no name)"}</td>
                 <td className="px-4 py-3 text-center">{r.actor_role}</td>
                 <td className="px-4 py-3 text-center">{r.action_type}</td>
-                <td className="px-4 py-3 text-center">{r.order_id}</td>
-                <td className="px-4 py-3 text-center">{r.description ?? ""}</td>
+                <td className="px-4 py-3 text-center">{r.order_id ?? "--"} </td>
+                <td className="px-4 py-3 text-center">{r.description ?? "(no description)"}</td>
               </tr>
             ))
           )}

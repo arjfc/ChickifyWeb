@@ -86,7 +86,7 @@ export default function DashboardLayout() {
     "/super-admin/pricing": "Pricing Management",
     "/super-admin/remittance": "Remittance",
     "/super-admin/activity-logs": "Activity Logs",
-    "/super-admin/reports": "Reports",
+    "/super-admin/reports": "Fees Reports",
     "/super-admin/settings": "Account Settings",
     "/super-admin/users/view-users": "Admin's Profile",
     "/super-admin/users/edit-users": "Edit Admin's Profile",
@@ -113,6 +113,7 @@ export default function DashboardLayout() {
     "/admin/payout-request": "Payout Request",
     "/admin/reports": "Reports",
     "/admin/settings": "Account Settings",
+    "/admin/price-forecast-analysis": "Price Forecast Analysis",
   };
 
   const excludedPaths = [

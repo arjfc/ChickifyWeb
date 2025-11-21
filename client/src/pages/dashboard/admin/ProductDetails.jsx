@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../../../components/Card";
 import { IoFilterOutline } from "react-icons/io5";
+import { FaCircleInfo } from "react-icons/fa6";
 import ProductTable from "../../../components/admin/tables/ProductTable";
+import SmallCard from "../../../components/super-admin/SmallCard";
 import Modal from "react-modal";
 import TrayEggImg from "../../../assets/tray-egg.png";
 
@@ -69,6 +71,36 @@ const modalBaseStyle = {
   overlay: { backgroundColor: "rgba(0,0,0,0.8)", zIndex: 1000 },
 };
 
+// Info modal for "Price per Tray"
+const modalStyle2 = {
+  content: {
+    top: "50%",
+    left: "50%",
+    right: "auto",
+    bottom: "auto",
+    transform: "translate(-50%, -50%)",
+    borderRadius: 20,
+    padding: 10,
+    maxHeight: "100vh",
+    width: "25vw",
+    minWidth: 320,
+    overflow: "visible",
+  },
+  overlay: {
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    zIndex: 1000,
+  },
+};
+
+// Static base price guide (just a visual reference for admins)
+const basePriceSizes = [
+  { size: "Extra Large", id: "xl", number: 220 },
+  { size: "Large", id: "lg", number: 200 },
+  { size: "Medium", id: "md", number: 180 },
+  { size: "Small", id: "sm", number: 150 },
+  { size: "Extra Small", id: "xs", number: 120 },
+];
+
 export default function ProductDetails() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -95,6 +127,10 @@ export default function ProductDetails() {
 
   const [previewUrl, setPreviewUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  // base price info modal
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const handleInfoModal = () => setIsInfoModalOpen((s) => !s);
 
   // toast state
   const [toast, setToast] = useState(null);
@@ -270,7 +306,7 @@ export default function ProductDetails() {
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* LEFT CARD */}
+        {/* LEFT + RIGHT cards */}
         <div className="flex flex-col gap-5 lg:flex-row w-full col-span-2">
           <Card>
             <div className="flex flex-col gap-3">
@@ -294,7 +330,9 @@ export default function ProductDetails() {
                   </p>
                   <div className="text-sm text-gray-600">
                     Price / Tray:{" "}
-                    {current ? Number(current.prod_price_per_tray).toFixed(2) : "—"}
+                    {current
+                      ? Number(current.prod_price_per_tray).toFixed(2)
+                      : "—"}
                     <br />
                     Status: {current?.prod_status || "—"}
                   </div>
@@ -306,7 +344,9 @@ export default function ProductDetails() {
           {/* RIGHT CARD */}
           <Card>
             <div className="flex flex-col gap-5">
-              <h1 className="text-gray-400 text-lg font-bold">Recently Available Size</h1>
+              <h1 className="text-gray-400 text-lg font-bold">
+                Recently Available Size
+              </h1>
               <div className="flex flex-wrap gap-2 sm:gap-4">
                 {sizesHeader.map((label, i) => (
                   <div
@@ -350,6 +390,35 @@ export default function ProductDetails() {
           </Card>
         </div>
 
+        {/* CURRENT BASE PRICE CARD (guide) */}
+        <div className="col-span-2">
+          <div className="flex flex-col gap-3 p-4 rounded-lg border border-gray-200 shadow-lg">
+            <div className="flex flex-row justify-between items-center">
+              <div className="flex flex-row gap-2 items-center">
+                <h1 className="text-lg md:text-xl text-primaryYellow font-semibold">
+                  Current Base Price of Tray
+                </h1>
+                <FaCircleInfo
+                  onClick={handleInfoModal}
+                  className="text-base text-gray-400 cursor-pointer"
+                  title="What is Price per Tray?"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
+              {basePriceSizes.map((data) => (
+                <SmallCard
+                  size={data.size}
+                  id={data.id}
+                  key={data.id}
+                  number={data.number}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* TABLE + Add button */}
         <div className="col-span-2 p-4 sm:p-6 rounded-lg border border-gray-200 shadow-lg overflow-x-auto">
           <div className="flex justify-end mb-3">
@@ -360,10 +429,14 @@ export default function ProductDetails() {
               Add Product
             </button>
           </div>
-          <ProductTable products={products} loading={loading} onEdit={onClickEdit} />
+          <ProductTable
+            products={products}
+            loading={loading}
+            onEdit={onClickEdit}
+          />
         </div>
 
-        {/* MODAL */}
+        {/* PRODUCT MODAL */}
         <Modal
           isOpen={isModalOpen}
           onRequestClose={() => setIsModalOpen(false)}
@@ -382,7 +455,7 @@ export default function ProductDetails() {
                   className="relative block w-full border rounded-lg shadow-md bg-gray-50"
                   style={{ height: 180 }}
                 >
-                  {(previewUrl || form.prod_img) ? (
+                  {previewUrl || form.prod_img ? (
                     <img
                       src={previewUrl || form.prod_img}
                       alt="preview"
@@ -424,18 +497,25 @@ export default function ProductDetails() {
                 </label>
 
                 <div className="mt-1 text-xs text-gray-500">
-                  {isUploading ? "Uploading image…" : "Click the box to choose an image"}
+                  {isUploading
+                    ? "Uploading image…"
+                    : "Click the box to choose an image"}
                 </div>
               </div>
 
               <div className="flex flex-col gap-5">
                 {/* Category */}
                 <div className="flex flex-col">
-                  <label className="mb-2 font-bold text-gray-400">Category</label>
+                  <label className="mb-2 font-bold text-gray-400">
+                    Category
+                  </label>
                   <select
                     value={form.p_categ_id || ""}
                     onChange={(e) =>
-                      setForm((v) => ({ ...v, p_categ_id: Number(e.target.value) }))
+                      setForm((v) => ({
+                        ...v,
+                        p_categ_id: Number(e.target.value),
+                      }))
                     }
                     className="border rounded-lg p-3 text-gray-600 shadow-md"
                   >
@@ -456,7 +536,10 @@ export default function ProductDetails() {
                   <select
                     value={form.size_id || ""}
                     onChange={(e) =>
-                      setForm((v) => ({ ...v, size_id: Number(e.target.value) }))
+                      setForm((v) => ({
+                        ...v,
+                        size_id: Number(e.target.value),
+                      }))
                     }
                     className="border rounded-lg p-3 text-gray-600 shadow-md"
                   >
@@ -475,24 +558,33 @@ export default function ProductDetails() {
 
             {/* Name */}
             <div className="flex flex-col">
-              <label className="mb-2 font-bold text-gray-400">Product Name</label>
+              <label className="mb-2 font-bold text-gray-400">
+                Product Name
+              </label>
               <input
                 type="text"
                 placeholder="Enter product name"
                 value={form.prod_name}
-                onChange={(e) => setForm((v) => ({ ...v, prod_name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((v) => ({ ...v, prod_name: e.target.value }))
+                }
                 className="border rounded-lg p-3 text-gray-600 shadow-md"
               />
             </div>
 
             {/* Description */}
             <div className="flex flex-col">
-              <label className="mb-2 font-bold text-gray-400">Product Description</label>
+              <label className="mb-2 font-bold text-gray-400">
+                Product Description
+              </label>
               <textarea
                 placeholder="Enter product description"
                 value={form.prod_description}
                 onChange={(e) =>
-                  setForm((v) => ({ ...v, prod_description: e.target.value }))
+                  setForm((v) => ({
+                    ...v,
+                    prod_description: e.target.value,
+                  }))
                 }
                 className="border rounded-lg p-3 resize-none shadow-md text-gray-600"
                 rows={3}
@@ -502,13 +594,18 @@ export default function ProductDetails() {
             {/* Price + Status */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col">
-                <label className="mb-2 font-bold text-gray-400">Price / Tray</label>
+                <label className="mb-2 font-bold text-gray-400">
+                  Price / Tray
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   value={form.prod_price_per_tray}
                   onChange={(e) =>
-                    setForm((v) => ({ ...v, prod_price_per_tray: e.target.value }))
+                    setForm((v) => ({
+                      ...v,
+                      prod_price_per_tray: e.target.value,
+                    }))
                   }
                   className="border rounded-lg p-3 text-gray-600 shadow-md"
                   placeholder="e.g., 210.00"
@@ -542,10 +639,41 @@ export default function ProductDetails() {
                 onClick={onSave}
                 className="flex-1 bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
                 disabled={isUploading}
-                title={isUploading ? "Please wait for the image upload to finish" : ""}
+                title={
+                  isUploading
+                    ? "Please wait for the image upload to finish"
+                    : ""
+                }
               >
                 Save Changes
               </button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* INFO MODAL: Price per Tray explanation */}
+        <Modal
+          isOpen={isInfoModalOpen}
+          onRequestClose={handleInfoModal}
+          style={modalStyle2}
+          ariaHideApp={false}
+        >
+          <div className="flex flex-col gap-5 items-center justify-center p-6">
+            <h1 className="text-primaryYellow font-bold text-xl">
+              Price Per Tray
+            </h1>
+            <p className="font-semibold opacity-70 text-center text-sm">
+              Price per Tray refers to the cost assigned to one standard tray of
+              eggs (typically 30 pieces). It serves as the base unit for pricing
+              in egg sales. This metric is commonly used in poultry trading
+              because it standardizes egg pricing, making it simple to compare,
+              track, and adjust prices across markets.
+            </p>
+            <div
+              onClick={handleInfoModal}
+              className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90 w-full text-center"
+            >
+              <p className="text-lg">Okay</p>
             </div>
           </div>
         </Modal>

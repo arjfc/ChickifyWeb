@@ -181,14 +181,6 @@ export default function AdminDashboard() {
                 Current total amount need to remit this month.
               </div>
             </div>
-            <button
-              onClick={() => setInfoOpen(true)}
-              className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800"
-              title="What is this?"
-            >
-              <IoInformationCircleOutline className="text-xl" />
-              Info
-            </button>
           </div>
 
           <div className="mt-6">
@@ -200,11 +192,12 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          
           <button
             onClick={() => setRemitOpen(true)}
-            className="mt-6 w-full rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95"
+            className="mt-auto w-full rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95"
           >
-            Remit
+            Submit Remittance
           </button>
         </div>
       </div>
@@ -231,13 +224,6 @@ export default function AdminDashboard() {
               <MdKeyboardArrowRight className="absolute top-3 right-3 w-8 h-8" />
             </div>
           ))}
-
-          <button
-            onClick={() => setRemitOpen(true)}
-            className="mt-auto w-full rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95"
-          >
-            Submit Remittance
-          </button>
         </div>
       </div>
 

@@ -73,3 +73,30 @@ export async function fetchBuyersList() {
 //     (row) => (row.account_type || "").toLowerCase() === "buyer"
 //   );
 // };
+
+//===================================
+// Monitor fees collected
+//===================================
+export async function fetchFeesCollectedByAdmin({
+  dateFrom = null,
+  dateTo = null,
+} = {}) {
+  // RPC expects DATE (YYYY-MM-DD)
+  const normalizeDate = (d) => {
+    if (!d) return null;
+    const s = String(d).trim();
+    return s.includes("T") ? s.split("T")[0] : s;
+  };
+
+  const { data, error } = await supabase.rpc("view_fees_collected_admin", {
+    p_date_from: normalizeDate(dateFrom),
+    p_date_to: normalizeDate(dateTo),
+  });
+
+  if (error) {
+    console.error("view_fees_collected_admin error:", error);
+    throw error;
+  }
+
+  return data ?? [];
+}

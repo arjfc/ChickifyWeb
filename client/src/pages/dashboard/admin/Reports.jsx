@@ -1,8 +1,5 @@
-// pages/admin/reports/index.jsx
-// ✅ Uses the same Date Range UI (popover + 2-month grid) as your first code
-
-import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReportTable from "../../../components/admin/tables/ReportTable";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { LuCalendar, LuChevronLeft, LuChevronRight } from "react-icons/lu";
 
 /* ======================== helpers (same as first code) ======================== */
@@ -279,7 +276,8 @@ export default function Reports() {
   const options = [
     "Payout History",
     "Sales Records",
-    "Transaction Records",
+    // "Transaction Records",
+    "Fees Collected",
     "Egg Stock",
     "Egg Production",
     "List of Farmers",
