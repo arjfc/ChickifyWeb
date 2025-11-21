@@ -1,12 +1,6 @@
-import React, {
-  forwardRef,
-  useEffect,
-  useMemo,
-  useState,
-  useImperativeHandle,
-} from "react";
+import React, {forwardRef,useEffect,useMemo,useState,useImperativeHandle,} from "react";
 import Table from "../../Table";
-import { fetchTransactions } from "@/services/Transactionlogs";
+import {fetchTransactions,fetchCoopsOrAdmins,fetchBuyersList} from "@/services/Transactionlogs";
 import dayjs from "dayjs";
 
 // PDF libs
@@ -15,7 +9,7 @@ import autoTable from "jspdf-autotable";
 
 const ReportsTable = forwardRef(function ReportsTable(
   {
-    tab = "Transaction",
+    tab = "Transaction", // "Transaction" | "List of Coops" | "List of Buyers"
     dateRange = "all",
     dateFrom = "",
     dateTo = "",
@@ -23,7 +17,13 @@ const ReportsTable = forwardRef(function ReportsTable(
   ref
 ) {
   const [logs, setLogs] = useState([]);
+  const [coops, setCoops] = useState([]);
+  const [buyers, setBuyers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const isCoopsTab = tab === "List of Coops";
+  const isBuyersTab = tab === "List of Buyers";
+  const isTransactionTab = !isCoopsTab && !isBuyersTab; // default
 
   // ===== Helpers (explicit date range) =====
   const parseDate = (d) => {
@@ -56,7 +56,9 @@ const ReportsTable = forwardRef(function ReportsTable(
       case "today":
         return d.isAfter(todayStart) && d.isBefore(todayStart.add(1, "day"));
       case "yesterday":
-        return d.isAfter(todayStart.subtract(1, "day")) && d.isBefore(todayStart);
+        return (
+          d.isAfter(todayStart.subtract(1, "day")) && d.isBefore(todayStart)
+        );
       case "7":
         return d.isAfter(todayStart.subtract(7, "day"));
       case "30":
@@ -72,32 +74,43 @@ const ReportsTable = forwardRef(function ReportsTable(
   }
 
   useEffect(() => {
-    const loadLogs = async () => {
+    const loadAll = async () => {
       try {
-        const data = await fetchTransactions();
-        setLogs(Array.isArray(data) ? data : []);
+        const [txData, coopData, buyerData] = await Promise.all([
+          fetchTransactions(),
+          fetchCoopsOrAdmins(),
+          fetchBuyersList(), // ⬅️ buyers from RPC
+        ]);
+
+        setLogs(Array.isArray(txData) ? txData : []);
+        setCoops(Array.isArray(coopData) ? coopData : []);
+        setBuyers(Array.isArray(buyerData) ? buyerData : []);
       } catch (err) {
-        console.error("Failed to fetch transaction logs:", err);
+        console.error("Failed to fetch reports data:", err);
       } finally {
         setLoading(false);
       }
     };
-    loadLogs();
+    loadAll();
   }, []);
 
-  // If explicit dates exist, they override the preset
+  // If explicit dates exist, they override the preset (only relevant for Transaction tab)
   const dateCheck = (iso) =>
     dateFrom || dateTo ? withinRange(iso) : inRangePreset(iso, dateRange);
 
   const filteredLogs = useMemo(() => {
+    if (!isTransactionTab) return [];
     return (logs || []).filter((log) => {
       const dateMatch = dateCheck(log.created_at);
-      const typeMatch = (log.fee_type || "").toLowerCase() === tab.toLowerCase();
+      const typeMatch =
+        (log.fee_type || "").toLowerCase() === tab.toLowerCase() ||
+        tab === "Transaction";
       return dateMatch && typeMatch;
     });
-  }, [logs, tab, dateRange, dateFrom, dateTo]);
+  }, [logs, tab, dateRange, dateFrom, dateTo, isTransactionTab]);
 
-  const headers = [
+  // ===== Headers for each tab =====
+  const txHeaders = [
     "Timestamp",
     "Order ID",
     "Coop Name",
@@ -106,6 +119,15 @@ const ReportsTable = forwardRef(function ReportsTable(
     "Amount",
     "Memo",
   ];
+
+  const coopHeaders = ["Name", "Address", "Contact No."];   // for List of Coops
+  const buyerHeaders = ["Name", "Address", "Contact No."];  // for List of Buyers
+
+  const activeHeaders = isTransactionTab
+    ? txHeaders
+    : isCoopsTab
+    ? coopHeaders
+    : buyerHeaders;
 
   // ===== Peso formatting + export mapping =====
   const pesoStrict = (v) => {
@@ -122,7 +144,8 @@ const ReportsTable = forwardRef(function ReportsTable(
       : "₱0.00";
   };
 
-  const rowsForExport = useMemo(
+  // Rows used for export depending on tab
+  const transactionRowsForExport = useMemo(
     () =>
       (filteredLogs || []).map((item) => [
         dayjs(item.created_at).format("MMM D, YYYY h:mm A"),
@@ -130,16 +153,42 @@ const ReportsTable = forwardRef(function ReportsTable(
         item.owner_name ?? "—",
         item.fee_type ?? "—",
         item.method ?? "—",
-        Number(item.amount ?? 0), // keep numeric first; we’ll format + right-align via colStyles
+        Number(item.amount ?? 0), // keep numeric first; we'll format later
         item.memo ?? "",
       ]),
     [filteredLogs]
   );
 
+  const coopRowsForExport = useMemo(
+    () =>
+      (coops || []).map((item) => [
+        item.name ?? "—",
+        item.address || "—",
+        item.contact_no || "—",
+      ]),
+    [coops]
+  );
+
+  const buyerRowsForExport = useMemo(
+    () =>
+      (buyers || []).map((item) => [
+        item.buyer_name ?? "—",
+        item.full_address || "—",
+        item.contact_no || "—",
+      ]),
+    [buyers]
+  );
+
+  const rowsForExport = isTransactionTab
+    ? transactionRowsForExport
+    : isCoopsTab
+    ? coopRowsForExport
+    : buyerRowsForExport;
+
   // ===== Unicode font loader for jsPDF (to render ₱) =====
   const FONT_NAME = "NotoSans";
   const FONT_FILE = "NotoSans-Regular.ttf";
-  const FONT_URL = "/fonts/NotoSans-Regular.ttf"; // place TTF at public/fonts/
+  const FONT_URL = "/fonts/NotoSans-Regular.ttf";
 
   const arrayBufferToBase64 = (buffer) => {
     let binary = "";
@@ -184,7 +233,6 @@ const ReportsTable = forwardRef(function ReportsTable(
 
       const hasUnicode = await ensureUnicodeFont(doc);
 
-      // Header
       const marginX = 40;
       let cursorY = 40;
 
@@ -195,32 +243,48 @@ const ReportsTable = forwardRef(function ReportsTable(
 
       doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
       doc.setFontSize(12);
+
+      // For coops and buyers lists, date range is not really relevant, but we show "All"
       const rangeTxt =
-        from || to ? `Date range: ${from || "—"} to ${to || "—"}` : "Date range: All";
+        isTransactionTab && (from || to)
+          ? `Date range: ${from || "—"} to ${to || "—"}`
+          : "Date range: All";
+
       doc.text(`${subtitle}`, marginX, cursorY);
       cursorY += 16;
       doc.text(rangeTxt, marginX, cursorY);
       cursorY += 12;
 
-      // Build table rows with formatted money
-      const amtColIndex = 5; // "Amount"
-      const bodyRaw = rowsForExport.map((row) =>
-        row.map((val, idx) => (idx === amtColIndex ? pesoStrict(val) : val))
-      );
+      // Build table rows with proper formatting
+      let bodyRaw;
+
+      if (isTransactionTab) {
+        const amtColIndex = 5; // "Amount"
+        bodyRaw = rowsForExport.map((row) =>
+          row.map((val, idx) => (idx === amtColIndex ? pesoStrict(val) : val))
+        );
+      } else {
+        // coops & buyers: no peso formatting
+        bodyRaw = rowsForExport;
+      }
 
       const bodySafe = hasUnicode
         ? bodyRaw
         : bodyRaw.map((r) =>
-            r.map((c) => (typeof c === "string" ? c.replace(/₱/g, "PHP ") : c))
+            r.map((c) =>
+              typeof c === "string" ? c.replace(/₱/g, "PHP ") : c
+            )
           );
 
-      const columnStyles = {
-        [amtColIndex]: { halign: "right" },
-      };
+      const columnStyles = isTransactionTab
+        ? {
+            5: { halign: "right" }, // Amount
+          }
+        : {};
 
       autoTable(doc, {
         startY: cursorY + 8,
-        head: [headers],
+        head: [activeHeaders],
         body: bodySafe,
         styles: {
           font: hasUnicode ? FONT_NAME : "helvetica",
@@ -243,22 +307,75 @@ const ReportsTable = forwardRef(function ReportsTable(
 
       const safeName =
         filename ||
-        `${String(subtitle).replace(/\s+/g, "_").toLowerCase()}_${from || "all"}_${to || "all"}.pdf`;
+        `${String(subtitle)
+          .replace(/\s+/g, "_")
+          .toLowerCase()}_${from || "all"}_${to || "all"}.pdf`;
       doc.save(safeName);
     },
   }));
 
+  // ===== Render =====
   return (
-    <Table headers={headers}>
+    <Table headers={activeHeaders}>
       {loading ? (
         <tr>
-          <td colSpan={headers.length} className="text-center py-4">
-            Loading transactions...
+          <td colSpan={activeHeaders.length} className="text-center py-4">
+            Loading reports...
           </td>
         </tr>
+      ) : isCoopsTab ? (
+        coops.length === 0 ? (
+          <tr>
+            <td colSpan={activeHeaders.length} className="text-center py-4">
+              No coops/admins found.
+            </td>
+          </tr>
+        ) : (
+          coops.map((item, index) => (
+            <tr
+              key={item.coop_id || index}
+              className="bg-yellow-100 text-gray-700 rounded-lg shadow-sm transition"
+            >
+              <td className="px-4 py-3 text-center font-medium">
+                {item.name}
+              </td>
+              <td className="px-4 py-3 text-center">
+                {item.address || "—"}
+              </td>
+              <td className="px-4 py-3 text-center">
+                {item.contact_no || "—"}
+              </td>
+            </tr>
+          ))
+        )
+      ) : isBuyersTab ? (
+        buyers.length === 0 ? (
+          <tr>
+            <td colSpan={activeHeaders.length} className="text-center py-4">
+              No buyers found.
+            </td>
+          </tr>
+        ) : (
+          buyers.map((item, index) => (
+            <tr
+              key={index}
+              className="bg-yellow-100 text-gray-700 rounded-lg shadow-sm transition"
+            >
+              <td className="px-4 py-3 text-center font-medium">
+                {item.buyer_name}
+              </td>
+              <td className="px-4 py-3 text-center">
+                {item.full_address || "—"}
+              </td>
+              <td className="px-4 py-3 text-center">
+                {item.contact_no || "—"}
+              </td>
+            </tr>
+          ))
+        )
       ) : filteredLogs.length === 0 ? (
         <tr>
-          <td colSpan={headers.length} className="text-center py-4">
+          <td colSpan={activeHeaders.length} className="text-center py-4">
             No matching records found.
           </td>
         </tr>

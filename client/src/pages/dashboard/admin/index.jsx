@@ -20,6 +20,9 @@ import {
   getCebuSeasonalPricesLocal,
 } from "@/services/analytics";
 
+// 👉 NEW: import the client usage for the RPC
+import { fetchAdminFees } from "@/services/Remittance";
+
 export default function AdminDashboard() {
   const [summary, setSummary] = useState({
     total_active_users: 0,
@@ -33,8 +36,8 @@ export default function AdminDashboard() {
   const [orderStatus, setOrderStatus] = useState({ labels: [], series: [], raw: [] });
   const [forecast, setForecast] = useState([]);
 
-  // Optional: if you already compute this from ledger elsewhere, wire it here.
-  const [remitBalance] = useState(0);
+  // ✅ Remittance balance now comes from view_admin_fees (total_fees)
+  const [remitBalance, setRemitBalance] = useState(0);
 
   // Info & Remit modals
   const [infoOpen, setInfoOpen] = useState(false);
@@ -92,6 +95,15 @@ export default function AdminDashboard() {
         });
       }
 
+      // 👉 NEW: fetch total fees for this admin from view_admin_fees
+      try {
+        const { totalFees } = await fetchAdminFees();
+        setRemitBalance(totalFees);
+      } catch (e) {
+        console.error("[admin-fees] error:", e);
+        setRemitBalance(0);
+      }
+
       const yr = new Date().getFullYear();
       setForecast(getCebuSeasonalPricesLocal(yr, 300));
     })();
@@ -139,7 +151,7 @@ export default function AdminDashboard() {
         {/* Gross Income donut */}
         <div className="col-span-1 lg:col-span-2 p-6 rounded-lg border border-gray-200 shadow-lg">
           <div className="mb-3 font-semibold text-gray-700">Gross Income</div>
-          {/* Pass your series/labels appropriate for gross income */}
+          {/* TODO: wire real data later */}
           <DonutChart
             data={{
               labels: ["Source A", "Source B", "Source C"],
@@ -151,7 +163,7 @@ export default function AdminDashboard() {
         {/* Net Income donut */}
         <div className="col-span-1 lg:col-span-1 p-6 rounded-lg border border-gray-200 shadow-lg">
           <div className="mb-3 font-semibold text-gray-700">Net Income</div>
-          {/* Pass your series/labels appropriate for net income */}
+          {/* TODO: wire real data later */}
           <DonutChart
             data={{
               labels: ["After Fees", "Adjustments"],
@@ -160,7 +172,7 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* Remittance Balance card (Info icon here, not in Insights) */}
+        {/* Remittance Balance card */}
         <div className="col-span-1 p-6 rounded-lg border border-gray-200 shadow-lg flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
@@ -180,7 +192,9 @@ export default function AdminDashboard() {
           </div>
 
           <div className="mt-6">
-            <div className="text-4xl font-extrabold">₱{Number(remitBalance).toLocaleString()}</div>
+            <div className="text-4xl font-extrabold">
+              ₱{Number(remitBalance).toLocaleString()}
+            </div>
             <div className="text-xs text-gray-500 mt-1">
               Based on this month’s cleared sales and ledger rules.
             </div>
@@ -201,7 +215,7 @@ export default function AdminDashboard() {
           <LineChart data={salesTrend} bestProduct={topProduct} />
         </div>
 
-        {/* Insights card (right sidebar) */}
+        {/* Insights card */}
         <div className="col-span-1 flex flex-col gap-4 p-6 rounded-lg border border-gray-200 shadow-lg h-full">
           <div className="text-primaryYellow flex flex-col gap-2 leading-tight">
             <h1 className="text-2xl font-bold">View Insights</h1>

@@ -2,13 +2,7 @@
 "use client";
 import React, {useEffect,useMemo,useState,forwardRef,useImperativeHandle} from "react";
 import Table from "../../Table";
-import {
-  fetchEggProduction,
-  fetchEggBatch,
-  fetchAdminSalesRecords,
-  fetchPayoutOverviewList,
-  fetchMyFarmersList,          // ⬅️ use wrapper that reads auth.uid()
-} from "@/services/Reports";
+import {fetchEggProduction,fetchEggBatch,fetchAdminSalesRecords,fetchPayoutOverviewList,fetchMyFarmersList,} from "@/services/Reports";
 import { fetchTransactionsByAdmin } from "@/services/TransactionLogs";
 
 // pdf libs
