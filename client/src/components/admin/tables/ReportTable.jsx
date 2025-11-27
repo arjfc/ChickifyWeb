@@ -1,18 +1,19 @@
 // components/admin/tables/ReportTable.jsx
-import React, { useEffect, useMemo, useState } from "react";
+"use client";
+import React, {useEffect,useMemo,useState,forwardRef,useImperativeHandle,} from "react";
 import Table from "../../Table";
-import {
-  fetchEggProduction,
-  fetchEggBatch,
-  fetchAdminSalesRecords,
-  // ⬇️ existing client for payouts (approved only)
-  fetchPayoutOverviewList,
-} from "@/services/Reports";
-// ⬇️ bring in your Transaction Records RPC
-import { fetchTransactionsByAdmin } from "@/services/TransactionLogs";
+import {fetchEggProduction,fetchEggBatch,fetchAdminSalesRecords,fetchPayoutOverviewList,fetchMyFarmersList,} from "@/services/Reports";
+import { fetchTransactionsByAdmin, fetchFeesCollectedByAdmin, } from "@/services/TransactionLogs";
 
-export default function ReportTable({ selectedOption, dateRange = "all" }) {
-  // ===== Shared helpers =====
+// pdf libs
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+const ReportTable = forwardRef(function ReportTable(
+  { selectedOption, dateFrom = "", dateTo = "" },
+  ref
+) {
+  /* ======================== helpers ======================== */
   const peso = (n) =>
     typeof n === "number"
       ? `₱${n.toLocaleString(undefined, {
@@ -21,75 +22,131 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
         })}`
       : "₱0.00";
 
-  // Supabase typically returns ISO (e.g., "2025-10-02").
-  // Keep support for mm/dd/yy just in case.
+  const pesoStrict = (v) => {
+    if (typeof v === "string" && v.trim().startsWith("₱")) return v;
+    const num =
+      typeof v === "number"
+        ? v
+        : Number(String(v ?? "").replace(/[^\d.-]/g, ""));
+    return Number.isFinite(num)
+      ? `₱${num.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : "₱0.00";
+  };
+
+  const MONEY_COLS = {
+    "Payout History": new Set([2]),
+    "Sales Records": new Set([5, 6]),
+    "Transaction Records": new Set([3, 4, 5, 6]),
+    "Egg Stock": new Set(),
+    "Egg Production": new Set(),
+    "List of Farmers": new Set(),
+    // ⬇️ NEW
+    "Fees Collected": new Set([6]), // amount col
+  };
+
+  /* ======================== Unicode font ======================== */
+  const FONT_NAME = "NotoSans";
+  const FONT_FILE = "NotoSans-Regular.ttf";
+  const FONT_URL = "/fonts/NotoSans-Regular.ttf";
+  let FONT_READY = false;
+
+  const arrayBufferToBase64 = (buffer) => {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++)
+      binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+
+  async function ensureUnicodeFont(doc) {
+    if (FONT_READY) {
+      doc.setFont(FONT_NAME, "normal");
+      return true;
+    }
+    try {
+      const res = await fetch(FONT_URL, { cache: "force-cache" });
+      if (!res.ok) throw new Error(`Font fetch failed (${res.status})`);
+      const buf = await res.arrayBuffer();
+      const base64 = arrayBufferToBase64(buf);
+      doc.addFileToVFS(FONT_FILE, base64);
+      doc.addFont(FONT_FILE, FONT_NAME, "normal");
+      doc.addFont(FONT_FILE, FONT_NAME, "bold");
+      doc.setFont(FONT_NAME, "normal");
+      FONT_READY = true;
+      return true;
+    } catch (e) {
+      console.warn("[ReportTable] Unicode font not loaded:", e);
+      return false;
+    }
+  }
+
+  /* ======================== Background image (from public) ======================== */
+  const BG_URL = "/background.png";
+
+  const loadBgImageAsDataUrl = async () => {
+    try {
+      const res = await fetch(BG_URL);
+      if (!res.ok) throw new Error(`BG fetch failed (${res.status})`);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn(
+        "[ReportTable] Failed to load PDF background:",
+        e?.message || e
+      );
+      return null;
+    }
+  };
+
+  /* ======================== date helpers ======================== */
   const parseDate = (d) => {
     if (!d) return null;
     if (d instanceof Date) return d;
-
     const s = String(d).trim();
-
-    // Only treat as date-only if it is EXACTLY YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-      return new Date(`${s}T00:00:00`);
-    }
-
-    // mm/dd/yy support (UI/mock)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T00:00:00`);
     const mdy = s.split("/");
     if (mdy.length === 3) {
       const [mm, dd, yy] = mdy.map((x) => parseInt(x, 10));
       const fullY = yy < 100 ? 2000 + yy : yy;
       return new Date(fullY, (mm || 1) - 1, dd || 1);
     }
-
-    // Let JS handle full ISO timestamps (with time & timezone)
     const t = new Date(s);
     return Number.isNaN(t.getTime()) ? null : t;
   };
 
+  const toStartOfDay = (d) => {
+    if (!d) return null;
+    const dt = parseDate(d);
+    if (!dt) return null;
+    dt.setHours(0, 0, 0, 0);
+    return dt;
+  };
+  const toEndOfDay = (d) => {
+    if (!d) return null;
+    const dt = parseDate(d);
+    if (!dt) return null;
+    dt.setHours(23, 59, 59, 999);
+    return dt;
+  };
 
-  // UI date range helper (inclusive)
-  const getRange = (key) => {
-    const now = new Date();
-    const end = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      23, 59, 59, 999
-    );
-    if (key === "all") return { from: null, to: null };
+  const FROM = toStartOfDay(dateFrom || null);
+  const TO = toEndOfDay(dateTo || null);
 
-    if (key === "today") {
-      const start = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        0, 0, 0, 0
-      );
-      return { from: start, to: end };
-    }
-    if (key === "yesterday") {
-      const y = new Date(now);
-      y.setDate(now.getDate() - 1);
-      const start = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0, 0);
-      const stop = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
-      return { from: start, to: stop };
-    }
-    if (key === "7" || key === "30") {
-      const days = parseInt(key, 10);
-      const start = new Date(now);
-      start.setDate(now.getDate() - (days - 1));
-      start.setHours(0, 0, 0, 0);
-      return { from: start, to: end };
-    }
-    if (key === "last_month") {
-      const firstOfThis = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastOfPrev = new Date(firstOfThis - 1);
-      const start = new Date(lastOfPrev.getFullYear(), lastOfPrev.getMonth(), 1, 0, 0, 0, 0);
-      const stop = new Date(lastOfPrev.getFullYear(), lastOfPrev.getMonth(), lastOfPrev.getDate(), 23, 59, 59, 999);
-      return { from: start, to: stop };
-    }
-    return { from: null, to: null };
+  const withinRange = (dateValue) => {
+    if (!dateFrom && !dateTo) return true;
+    const dt = parseDate(dateValue);
+    if (!dt) return false;
+    if (FROM && dt < FROM) return false;
+    if (TO && dt > TO) return false;
+    return true;
   };
 
   const mmddyy = (d) => {
@@ -102,7 +159,7 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     return `${mm}/${dd}/${yy}`;
   };
 
-  // ===== Egg Production =====
+  /* ======================== data loads ======================== */
   const [eggRows, setEggRows] = useState([]);
   const [eggLoading, setEggLoading] = useState(false);
 
@@ -112,9 +169,10 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     (async () => {
       try {
         setEggLoading(true);
-        const data = await fetchEggProduction({ dateRange });
+        const data = await fetchEggProduction({ dateRange: "all" });
         if (!alive) return;
-        const mapped = (data || []).map((r) => ({
+        const filtered = (data || []).filter((r) => withinRange(r.prod_date));
+        const mapped = filtered.map((r) => ({
           productionID: r.egg_prod,
           farmerName: r.farmer_name || "—",
           flockID: r.flock_id ?? "—",
@@ -137,9 +195,8 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     return () => {
       alive = false;
     };
-  }, [selectedOption, dateRange]);
+  }, [selectedOption, dateFrom, dateTo]);
 
-  // ===== Egg Stock =====
   const [batchRows, setBatchRows] = useState([]);
   const [batchLoading, setBatchLoading] = useState(false);
 
@@ -149,9 +206,12 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     (async () => {
       try {
         setBatchLoading(true);
-        const data = await fetchEggBatch({ dateRange });
+        const data = await fetchEggBatch({ dateRange: "all" });
         if (!alive) return;
-        const mapped = (data || []).map((r) => ({
+        const filtered = (data || []).filter((r) =>
+          withinRange(r.date_collected)
+        );
+        const mapped = filtered.map((r) => ({
           batchID: r.batch_id,
           farmerName: r.farmer_name || "—",
           productID: r.product_id || "—",
@@ -173,9 +233,8 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     return () => {
       alive = false;
     };
-  }, [selectedOption, dateRange]);
+  }, [selectedOption, dateFrom, dateTo]);
 
-  // ===== Sales Records =====
   const [salesRows, setSalesRows] = useState([]);
   const [salesLoading, setSalesLoading] = useState(false);
 
@@ -185,9 +244,12 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     (async () => {
       try {
         setSalesLoading(true);
-        const data = await fetchAdminSalesRecords({ dateRange });
+        const data = await fetchAdminSalesRecords({ dateRange: "all" });
         if (!alive) return;
-        const mapped = (data || []).map((r) => ({
+        const filtered = (data || []).filter((r) =>
+          withinRange(r.order_date)
+        );
+        const mapped = filtered.map((r) => ({
           orderID: r.order_id,
           buyerName: r.buyer_name || "—",
           productName: r.product_name || "—",
@@ -196,13 +258,18 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
           pricePerTray: r.price_per_tray ?? 0,
           totalAmount: r.total_amount ?? 0,
           orderDate: mmddyy(r.order_date),
-          fulfillmentDate: r.fulfillment_date ? mmddyy(r.fulfillment_date) : "—",
+          fulfillmentDate: r.fulfillment_date
+            ? mmddyy(r.fulfillment_date)
+            : "—",
           orderStatus: r.order_status || "—",
           paymentStatus: r.payment_status ?? "—",
         }));
         setSalesRows(mapped);
       } catch (e) {
-        console.error("[ReportTable] view_admin_sales_records:", e?.message || e);
+        console.error(
+          "[ReportTable] view_admin_sales_records:",
+          e?.message || e
+        );
         setSalesRows([]);
       } finally {
         if (alive) setSalesLoading(false);
@@ -211,27 +278,26 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     return () => {
       alive = false;
     };
-  }, [selectedOption, dateRange]);
+  }, [selectedOption, dateFrom, dateTo]);
 
-  // ===== Payout History (Approved only) =====
   const [payoutRows, setPayoutRows] = useState([]);
   const [payoutLoading, setPayoutLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
     if (selectedOption !== "Payout History") return;
-
     (async () => {
       try {
         setPayoutLoading(true);
         const list = await fetchPayoutOverviewList();
         if (!alive) return;
-
         const approvedOnly = (list || []).filter(
           (r) => (r?.status || "").toLowerCase() === "approved"
         );
-
-        const mapped = approvedOnly.map((r) => ({
+        const filtered = approvedOnly.filter((r) =>
+          withinRange(r.request_date)
+        );
+        const mapped = filtered.map((r) => ({
           payoutID: r.payout_id,
           sellerName: r.requestor_name || "—",
           amount: Number(r.amount ?? 0),
@@ -239,22 +305,22 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
           processDate: r.processed_at ? mmddyy(r.processed_at) : "—",
           status: "Approved",
         }));
-
         setPayoutRows(mapped);
       } catch (e) {
-        console.error("[ReportTable] view_payout_overview_admin:", e?.message || e);
+        console.error(
+          "[ReportTable] view_payout_overview_admin:",
+          e?.message || e
+        );
         setPayoutRows([]);
       } finally {
         if (alive) setPayoutLoading(false);
       }
     })();
-
     return () => {
       alive = false;
     };
-  }, [selectedOption]);
+  }, [selectedOption, dateFrom, dateTo]);
 
-  // ===== Transaction Records (RPC + UI date filter) =====
   const [txRawRows, setTxRawRows] = useState([]);
   const [txLoading, setTxLoading] = useState(false);
   const [txErr, setTxErr] = useState(null);
@@ -262,12 +328,11 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
   useEffect(() => {
     let alive = true;
     if (selectedOption !== "Transaction Records") return;
-
     (async () => {
       try {
         setTxErr(null);
         setTxLoading(true);
-        const rows = await fetchTransactionsByAdmin(); // your existing RPC client
+        const rows = await fetchTransactionsByAdmin();
         if (!alive) return;
         setTxRawRows(Array.isArray(rows) ? rows : []);
       } catch (e) {
@@ -278,22 +343,20 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
         if (alive) setTxLoading(false);
       }
     })();
-
     return () => {
       alive = false;
     };
   }, [selectedOption]);
 
-  // Map RPC → table shape
   const txMapped = useMemo(() => {
     return (txRawRows || []).map((r) => ({
-      orderID: r.order_code ?? `ORD-${String(r.order_id ?? "").padStart(4, "0")}`,
-      transactionDate: r.transaction_date, // keep raw; filter/format below
+      orderID:
+        r.order_code ?? `ORD-${String(r.order_id ?? "").padStart(4, "0")}`,
+      transactionDate: r.transaction_date,
       paymentMethod: r.payment_method || "",
       grossAmount: Number(r.gross_amount ?? 0),
       platformFee: Number(r.platform_fee ?? 0),
       netToCoop: Number(r.net_to_coop ?? 0),
-      // use provided platform_earnings if exists; else fall back to platform_fee
       platformEarnings: Number(
         r.platform_earnings ?? r.platform_fee ?? 0
       ),
@@ -301,21 +364,19 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     }));
   }, [txRawRows]);
 
-  // Apply UI-only date filter to Transaction Records
   const txFiltered = useMemo(() => {
-    const { from, to } = getRange(dateRange || "all");
-    if (!from && !to) return txMapped;
-    const within = (d) => {
-      const dt = parseDate(d);
+    if (!dateFrom && !dateTo) return txMapped;
+    const from = toStartOfDay(dateFrom || null);
+    const to = toEndOfDay(dateTo || null);
+    return txMapped.filter((row) => {
+      const dt = parseDate(row.transactionDate);
       if (!dt) return false;
       if (from && dt < from) return false;
       if (to && dt > to) return false;
       return true;
-    };
-    return txMapped.filter((row) => within(row.transactionDate));
-  }, [txMapped, dateRange]);
+    });
+  }, [txMapped, dateFrom, dateTo]);
 
-  // Pretty date for Transaction Records display
   const txVisible = useMemo(
     () =>
       txFiltered.map((r) => ({
@@ -325,7 +386,87 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
     [txFiltered]
   );
 
-  // ===== Headers =====
+  /* ======================== NEW: Fees collected ======================== */
+  const [feesRows, setFeesRows] = useState([]);
+  const [feesLoading, setFeesLoading] = useState(false);
+  const [feesErr, setFeesErr] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    if (selectedOption !== "Fees Collected") return;
+    (async () => {
+      try {
+        setFeesErr(null);
+        setFeesLoading(true);
+        const rows = await fetchFeesCollectedByAdmin({
+          dateFrom: dateFrom || null,
+          dateTo: dateTo || null,
+        });
+        if (!alive) return;
+        const safe = Array.isArray(rows) ? rows : [];
+        const mapped = safe.map((r) => ({
+          transactionID: r.transaction_id,
+          orderID: r.order_id ?? "—",
+          transactionDate: mmddyy(r.transaction_date),
+          feeType: r.fee_type || "—",
+          collectedFrom: r.collected_from || "—",
+          userRole: r.user_role || "—",
+          amount: Number(r.amount ?? 0),
+        }));
+        setFeesRows(mapped);
+      } catch (e) {
+        if (!alive) return;
+        console.error(
+          "[ReportTable] view_fees_collected_admin:",
+          e?.message || e
+        );
+        setFeesErr(e?.message || "Failed to load fees collected");
+        setFeesRows([]);
+      } finally {
+        if (alive) setFeesLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [selectedOption, dateFrom, dateTo]);
+
+  /* ======================== ⬇️ NEW: Farmers list ======================== */
+  const [farmersRows, setFarmersRows] = useState([]);
+  const [farmersLoading, setFarmersLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    if (selectedOption !== "List of Farmers") return;
+    (async () => {
+      try {
+        setFarmersLoading(true);
+        const rows = await fetchMyFarmersList(null); // null => ignore status filter
+        if (!alive) return;
+        const safe = Array.isArray(rows) ? rows : [];
+        const mapped = safe.map((r) => ({
+          fullName: r.full_name || r.name || "—",
+          address: r.address || "—",
+          contactNo: r.contact_no || r.phone || "—",
+          gcashNo: r.gcash_no || r.gcashNo || "—",
+        }));
+        setFarmersRows(mapped);
+      } catch (e) {
+        console.error(
+          "[ReportTable] view_farmers_under_coop:",
+          e?.message || e
+        );
+        setFarmersRows([]);
+      } finally {
+        if (alive) setFarmersLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [selectedOption]);
+
+  /* ======================== headers ======================== */
   const headerMap = {
     "Payout History": [
       "Payout ID",
@@ -381,9 +522,23 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
       "Notes",
       "Created",
     ],
+    "List of Farmers": ["Full Name", "Address", "Contact No.", "GCash No."],
+    // ⬇️ NEW
+    "Fees Collected": [
+      "Transaction ID",
+      "Order ID",
+      "Transaction Date",
+      "Fee Type",
+      "Collected From",
+      "User Role",
+      "Amount",
+    ],
   };
 
-  // ===== Source rows by tab (with loading skeleton rows) =====
+  /* ======================== paging ======================== */
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
   const sourceData = useMemo(() => {
     switch (selectedOption) {
       case "Payout History":
@@ -465,43 +620,64 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
               },
             ]
           : eggRows;
+      case "List of Farmers":
+        return farmersLoading
+          ? [
+              {
+                fullName: "Loading…",
+                address: "",
+                contactNo: "",
+                gcashNo: "",
+              },
+            ]
+          : farmersRows;
+      case "Fees Collected":
+        return feesLoading
+          ? [
+              {
+                transactionID: "Loading…",
+                orderID: "",
+                transactionDate: "",
+                feeType: "",
+                collectedFrom: "",
+                userRole: "",
+                amount: "",
+              },
+            ]
+          : feesRows;
       default:
         return [];
     }
   }, [
     selectedOption,
-    // payouts
     payoutRows,
     payoutLoading,
-    // sales
     salesRows,
     salesLoading,
-    // tx
     txVisible,
     txLoading,
-    // stock
     batchRows,
     batchLoading,
-    // production
     eggRows,
     eggLoading,
+    farmersRows,
+    farmersLoading,
+    feesRows,
+    feesLoading,
   ]);
 
-  // ===== Loading flags and pagination =====
+  useEffect(() => {
+    setPage(1);
+  }, [selectedOption, dateFrom, dateTo]);
+
   const isLoading =
     (selectedOption === "Payout History" && payoutLoading) ||
     (selectedOption === "Sales Records" && salesLoading) ||
     (selectedOption === "Transaction Records" && txLoading) ||
     (selectedOption === "Egg Stock" && batchLoading) ||
-    (selectedOption === "Egg Production" && eggLoading);
-
-  const PAGE_SIZE = 10;
-  const [page, setPage] = useState(1);
-
-  // Reset page on tab/date changes
-  useEffect(() => {
-    setPage(1);
-  }, [selectedOption, dateRange]);
+    (selectedOption === "Egg Production" && eggLoading) ||
+    (selectedOption === "List of Farmers" && farmersLoading) ||
+    (selectedOption === "Fees Collected" && feesLoading);
 
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil((sourceData?.length || 0) / PAGE_SIZE)),
@@ -516,61 +692,398 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
   const visibleData = isLoading
     ? sourceData
     : (sourceData || []).slice(pageStart, pageStart + PAGE_SIZE);
-
   const headers = headerMap[selectedOption] || [];
 
+  /* ======================== export prep ======================== */
+  const rowsForExport = useMemo(() => {
+    const rows = sourceData || [];
+    const mapRow = (item) => {
+      switch (selectedOption) {
+        case "Payout History":
+          return [
+            item.payoutID,
+            item.sellerName,
+            item.amount,
+            item.requestDate,
+            item.processDate,
+            "Approved",
+          ];
+        case "Sales Records":
+          return [
+            item.orderID,
+            item.buyerName,
+            item.productName,
+            item.variant,
+            item.quantity,
+            item.pricePerTray,
+            item.totalAmount,
+            item.orderDate,
+            item.fulfillmentDate,
+            item.orderStatus,
+            item.paymentStatus,
+          ];
+        case "Transaction Records":
+          return [
+            item.orderID,
+            item.transactionDate,
+            item.paymentMethod,
+            item.grossAmount,
+            item.platformFee,
+            item.netToCoop,
+            item.platformEarnings,
+            item.memo ?? "",
+          ];
+        case "Egg Stock":
+          return [
+            item.batchID,
+            item.farmerName,
+            item.productID,
+            item.eggQuantity,
+            item.dateCollected,
+            item.expiryDate,
+            item.size,
+            item.sold,
+            item.created,
+          ];
+        case "Egg Production":
+          return [
+            item.productionID,
+            item.farmerName,
+            item.flockID,
+            item.productionDate,
+            item.size,
+            item.totalEggs,
+            item.sellableEggs,
+            item.rejectEggs,
+            item.notes,
+            item.created,
+          ];
+        case "List of Farmers":
+          return [item.fullName, item.address, item.contactNo, item.gcashNo];
+        case "Fees Collected":
+          return [
+            item.transactionID,
+            item.orderID,
+            item.transactionDate,
+            item.feeType,
+            item.collectedFrom,
+            item.userRole,
+            item.amount,
+          ];
+        default:
+          return [];
+      }
+    };
+    const moneyCols = MONEY_COLS[selectedOption] || new Set();
+    return rows.map((row) =>
+      mapRow(row).map((val, idx) =>
+        moneyCols.has(idx) ? pesoStrict(val) : val
+      )
+    );
+  }, [sourceData, selectedOption]);
+ /* ======================== export PDF (fonts now match 1st code) ======================== */
+ useImperativeHandle(ref, () => ({
+  async exportPdf(meta = {}) {
+    const {
+      title = "Chickify Admin Reports",
+      subtitle = selectedOption,
+      dateFrom: fromProp = dateFrom,
+      dateTo: toProp = dateTo,
+      filename,
+    } = meta;
+
+    const rawFrom = fromProp;
+    const rawTo = toProp;
+
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "letter",
+    });
+
+    const hasUnicode = await ensureUnicodeFont(doc);
+    const bgDataUrl = await loadBgImageAsDataUrl();
+
+    const pageSize = doc.internal.pageSize;
+    const pageWidth = pageSize.width || pageSize.getWidth();
+    const pageHeight = pageSize.height || pageSize.getHeight();
+    const centerX = pageWidth / 2;
+
+    // 🔹 Background first (behind everything)
+    if (bgDataUrl) {
+      doc.addImage(bgDataUrl, "PNG", 0, 0, pageWidth, pageHeight);
+    }
+
+    // 👉 TOP/BOTTOM MARGINS
+    const firstPageTop = 158;
+    const otherPagesTop = 72;
+    const marginBottom = 72;
+    const marginX = 40;
+
+    let cursorY = firstPageTop;
+
+    // 👉 UPPERCASE SUBTITLE (like first code)
+    const subtitleHeader = String(subtitle || "").toUpperCase();
+
+    // Helper: "November 27, 2025"
+    const formatPrettyDate = (raw) => {
+      if (!raw) return null;
+      const dt = parseDate(raw);
+      if (!dt) return null;
+      const monthNames = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      const month = monthNames[dt.getMonth()];
+      const day = dt.getDate();
+      const year = dt.getFullYear();
+      return `${month} ${day}, ${year}`;
+    };
+
+    const prettyFrom = formatPrettyDate(rawFrom);
+    const prettyTo = formatPrettyDate(rawTo);
+
+    const rangeTxt =
+      prettyFrom || prettyTo
+        ? `Date range: ${prettyFrom || "—"} to ${prettyTo || "—"}`
+        : "Date range: All";
+
+    // ===== HEADER (fonts same as first code) =====
+    // Title – helvetica bold
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text(title, centerX, cursorY, { align: "center" });
+    cursorY += 22;
+
+    // Subtitle – helvetica bold, UPPERCASE
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(subtitleHeader, centerX, cursorY, { align: "center" });
+    cursorY += 40;
+
+    // Date range – right aligned, body font
+    doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(rangeTxt, pageWidth - marginX, cursorY, { align: "right" });
+
+    cursorY += 10;
+
+      const moneyCols = MONEY_COLS[subtitle] || new Set();
+      const columnStyles = {};
+      Array.from(moneyCols).forEach((colIdx) => {
+        columnStyles[colIdx] = { halign: "right" };
+      });
+
+      const bodySafe = rowsForExport;
+
+      /* ===== Footer for Sales Records (unchanged logic) ===== */
+      let footRows = undefined;
+      if (subtitle === "Sales Records") {
+        const completedRows = (sourceData || []).filter(
+          (r) =>
+            String(r?.paymentStatus || "").trim().toLowerCase() === "completed"
+        );
+        const totalCompleted = completedRows.reduce(
+          (s, r) => s + Number(r?.totalAmount ?? 0),
+          0
+        );
+        const COLS = headers.length;
+        const TARGET_COL = 10;
+        const COLSPAN = TARGET_COL;
+        const trailing = new Array(COLS - COLSPAN).fill("");
+        trailing[0] = {
+          content: peso(totalCompleted),
+          styles: {
+            fontStyle: "bold",
+            fontSize: 11,
+            halign: "right",
+            textColor: [33, 33, 33],
+          },
+        };
+        footRows = [
+          [
+            {
+              content: "TOTAL (Completed payments): ",
+              colSpan: COLSPAN,
+              styles: {
+                halign: "right",
+                fontStyle: "bold",
+                fontSize: 11,
+                textColor: [0, 0, 0],
+              },
+            },
+            ...trailing,
+          ],
+        ];
+      }
+
+      autoTable(doc, {
+        // first page = cursorY (~158) + 8; next pages use margin.top below
+        startY: cursorY + 8,
+        head: [headers],
+        body: bodySafe,
+        styles: {
+          font: hasUnicode ? FONT_NAME : "helvetica",
+          fontSize: 9,
+          cellPadding: 4,
+          halign: "center",
+        },
+        headStyles: {
+          font: "helvetica",
+          fontSize: 10,
+          fillColor: [255, 210, 77],
+          textColor: [33, 33, 33],
+        },
+        columnStyles,
+        foot: footRows,
+        footStyles: {
+          font: hasUnicode ? FONT_NAME : "helvetica",
+          fontStyle: "bold",
+          fillColor: [255, 248, 225],
+          textColor: [17, 24, 39],
+          halign: "right",
+        },
+        margin: {
+          top: otherPagesTop, // ✅ 2nd page and beyond: 72
+          bottom: marginBottom,
+          left: marginX,
+          right: marginX,
+        },
+        didDrawPage: () => {
+          const pageSizeInner = doc.internal.pageSize;
+          const pageHeightInner =
+            pageSizeInner.height || pageSizeInner.getHeight();
+          doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+          doc.setFontSize(10);
+          doc.text(
+            `Page ${doc.getNumberOfPages()}`,
+            marginX,
+            pageHeightInner - marginBottom / 2
+          );
+        },
+      });
+
+      const safeName =
+        filename ||
+        `${String(subtitle || "")
+          .replace(/\s+/g, "_")
+          .toLowerCase()}_${rawFrom || "all"}_${rawTo || "all"}.pdf`;
+      doc.save(safeName);
+    },
+  }));
+
+  /* ======================== UI ======================== */
   return (
-    <div className="[&_thead_th]:text-base [&_thead_th]:py-1 [&_thead_tr]:h-9 [&_thead_th]:font-bold">
-      {/* Transactions error banner (only for that tab) */}
+    <div className="[&_thead_th]:text-sm [&_thead_th]:py-1.5 [&_thead_tr]:h-8 [&_thead_th]:font-bold">
       {selectedOption === "Transaction Records" && txErr && (
-        <div className="mb-2 rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2">
+        <div className="mb-2 rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
           Error: {String(txErr)}
         </div>
       )}
 
-      <Table headers={headers}>
-        {visibleData.map((item, index) => (
-          <tr key={index} className="bg-[#faf4df] text-gray-700 rounded-lg shadow-sm">
-            {/* Payout History (Approved only) */}
+      {selectedOption === "Fees Collected" && feesErr && (
+        <div className="mb-2 rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
+          Error: {String(feesErr)}
+        </div>
+      )}
+
+      <Table headers={headerMap[selectedOption] || []}>
+        {(isLoading ? sourceData : visibleData || []).map((item, index) => (
+          <tr
+            key={index}
+            className="bg-[#faf4df] text-gray-700 rounded-lg shadow-sm"
+          >
+            {/* Payout History */}
             {selectedOption === "Payout History" && (
               <>
-                <td className="px-4 py-3 text-center font-medium">{item.payoutID}</td>
-                <td className="px-4 py-3 text-center">{item.sellerName}</td>
-                <td className="px-4 py-3 text-center">
-                  {typeof item.amount === "number" ? peso(item.amount) : item.amount}
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.payoutID}
                 </td>
-                <td className="px-4 py-3 text-center">{item.requestDate}</td>
-                <td className="px-4 py-3 text-center">{item.processDate}</td>
-                <td className="px-4 py-3 text-center font-medium text-green-600">Approved</td>
+                <td className="px-3 py-2 text-center">{item.sellerName}</td>
+                <td className="px-3 py-2 text-center">
+                  {typeof item.amount === "number"
+                    ? peso(item.amount)
+                    : item.amount}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.requestDate}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.processDate}
+                </td>
+                <td className="px-3 py-2 text-center font-medium text-green-600">
+                  Approved
+                </td>
               </>
             )}
 
             {/* Sales Records */}
             {selectedOption === "Sales Records" && (
               <>
-                <td className="px-4 py-3 text-center font-medium">{item.orderID}</td>
-                <td className="px-4 py-3 text-center">{item.buyerName}</td>
-                <td className="px-4 py-3 text-center">{item.productName}</td>
-                <td className="px-4 py-3 text-center">{item.variant}</td>
-                <td className="px-4 py-3 text-center">{item.quantity}</td>
-                <td className="px-4 py-3 text-center">{peso(item.pricePerTray)}</td>
-                <td className="px-4 py-3 text-center">{peso(item.totalAmount)}</td>
-                <td className="px-4 py-3 text-center">{item.orderDate}</td>
-                <td className="px-4 py-3 text-center">{item.fulfillmentDate}</td>
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.orderID}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.buyerName}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.productName}
+                </td>
+                <td className="px-3 py-2 text-center">{item.variant}</td>
+                <td className="px-3 py-2 text-center">{item.quantity}</td>
+                <td className="px-3 py-2 text-center">
+                  {peso(item.pricePerTray)}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {peso(item.totalAmount)}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.orderDate}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.fulfillmentDate}
+                </td>
                 <td
-                  className={`px-4 py-3 text-center font-medium ${
-                    item.orderStatus === "Delivered"
-                      ? "text-green-600"
-                      : item.orderStatus === "Pending"
-                      ? "text-yellow-500"
-                      : "text-red-500"
+                  className={`px-3 py-2 text-center font-medium ${
+                    (() => {
+                      const s = (item.orderStatus || "").toLowerCase();
+                      return s === "delivered" || s === "completed"
+                        ? "text-green-600"
+                        : s === "pending"
+                        ? "text-yellow-500"
+                        : s === "processing" ||
+                          s === "confirmed" ||
+                          s === "preparing" ||
+                          s === "packed"
+                        ? "text-blue-600"
+                        : s === "shipped" || s === "out for delivery"
+                        ? "text-sky-600"
+                        : s === "cancelled" ||
+                          s === "canceled" ||
+                          s === "rejected" ||
+                          s === "returned"
+                        ? "text-red-600"
+                        : "text-gray-600";
+                    })()
                   }`}
                 >
                   {item.orderStatus}
                 </td>
                 <td
-                  className={`px-4 py-3 text-center font-medium ${
-                    item.paymentStatus === "Paid" ? "text-green-600" : "text-yellow-500"
+                  className={`px-3 py-2 text-center font-medium ${
+                    item.paymentStatus === "Completed"
+                      ? "text-green-600"
+                      : "text-yellow-500"
                   }`}
                 >
                   {item.paymentStatus}
@@ -578,66 +1091,146 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
               </>
             )}
 
-            {/* Transaction Records (RPC + filters) */}
+            {/* Transaction Records */}
             {selectedOption === "Transaction Records" && (
               <>
-                <td className="px-4 py-3 text-center font-medium">{item.orderID}</td>
-                <td className="px-4 py-3 text-center">{item.transactionDate}</td>
-                <td className="px-4 py-3 text-center">{item.paymentMethod}</td>
-                <td className="px-4 py-3 text-center">
-                  {typeof item.grossAmount === "number" ? peso(item.grossAmount) : item.grossAmount}
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.orderID}
                 </td>
-                <td className="px-4 py-3 text-center">
-                  {typeof item.platformFee === "number" ? peso(item.platformFee) : item.platformFee}
+                <td className="px-3 py-2 text-center">
+                  {item.transactionDate}
                 </td>
-                <td className="px-4 py-3 text-center">
-                  {typeof item.netToCoop === "number" ? peso(item.netToCoop) : item.netToCoop}
+                <td className="px-3 py-2 text-center">
+                  {item.paymentMethod}
                 </td>
-                <td className="px-4 py-3 text-center">
-                  {typeof item.platformEarnings === "number" ? peso(item.platformEarnings) : item.platformEarnings}
+                <td className="px-3 py-2 text-center">
+                  {typeof item.grossAmount === "number"
+                    ? peso(item.grossAmount)
+                    : item.grossAmount}
                 </td>
-                <td className="px-4 py-3 text-center">{item.memo}</td>
+                <td className="px-3 py-2 text-center">
+                  {typeof item.platformFee === "number"
+                    ? peso(item.platformFee)
+                    : item.platformFee}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {typeof item.netToCoop === "number"
+                    ? peso(item.netToCoop)
+                    : item.netToCoop}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {typeof item.platformEarnings === "number"
+                    ? peso(item.platformEarnings)
+                    : item.platformEarnings}
+                </td>
+                <td className="px-3 py-2 text-center">{item.memo}</td>
               </>
             )}
 
             {/* Egg Stock */}
             {selectedOption === "Egg Stock" && (
               <>
-                <td className="px-4 py-3 text-center font-medium">{item.batchID}</td>
-                <td className="px-4 py-3 text-center">{item.farmerName}</td>
-                <td className="px-4 py-3 text-center">{item.productID}</td>
-                <td className="px-4 py-3 text-center">{item.eggQuantity}</td>
-                <td className="px-4 py-3 text-center">{item.dateCollected}</td>
-                <td className="px-4 py-3 text-center">{item.expiryDate}</td>
-                <td className="px-4 py-3 text-center">{item.size}</td>
-                <td className="px-4 py-3 text-center">{item.sold}</td>
-                <td className="px-4 py-3 text-center">{item.created}</td>
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.batchID}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.farmerName}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.productID}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.eggQuantity}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.dateCollected}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.expiryDate}
+                </td>
+                <td className="px-3 py-2 text-center">{item.size}</td>
+                <td className="px-3 py-2 text-center">{item.sold}</td>
+                <td className="px-3 py-2 text-center">{item.created}</td>
               </>
             )}
 
             {/* Egg Production */}
             {selectedOption === "Egg Production" && (
               <>
-                <td className="px-4 py-3 text-center font-medium">{item.productionID}</td>
-                <td className="px-4 py-3 text-center">{item.farmerName}</td>
-                <td className="px-4 py-3 text-center">{item.flockID}</td>
-                <td className="px-4 py-3 text-center">{item.productionDate}</td>
-                <td className="px-4 py-3 text-center">{item.size}</td>
-                <td className="px-4 py-3 text-center">{item.totalEggs}</td>
-                <td className="px-4 py-3 text-center">{item.sellableEggs}</td>
-                <td className="px-4 py-3 text-center">{item.rejectEggs}</td>
-                <td className="px-4 py-3 text-center">{item.notes}</td>
-                <td className="px-4 py-3 text-center">{item.created}</td>
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.productionID}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.farmerName}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.flockID}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.productionDate}
+                </td>
+                <td className="px-3 py-2 text-center">{item.size}</td>
+                <td className="px-3 py-2 text-center">
+                  {item.totalEggs}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.sellableEggs}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.rejectEggs}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.notes}
+                </td>
+                <td className="px-3 py-2 text-center">{item.created}</td>
+              </>
+            )}
+
+            {/* List of Farmers */}
+            {selectedOption === "List of Farmers" && (
+              <>
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.fullName}
+                </td>
+                <td className="px-3 py-2 text-center">{item.address}</td>
+                <td className="px-3 py-2 text-center">
+                  {item.contactNo}
+                </td>
+                <td className="px-3 py-2 text-center">{item.gcashNo}</td>
+              </>
+            )}
+
+            {/* Fees Collected */}
+            {selectedOption === "Fees Collected" && (
+              <>
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.transactionID}
+                </td>
+                <td className="px-3 py-2 text-center">{item.orderID}</td>
+                <td className="px-3 py-2 text-center">
+                  {item.transactionDate}
+                </td>
+                <td className="px-3 py-2 text-center">{item.feeType}</td>
+                <td className="px-3 py-2 text-center">
+                  {item.collectedFrom}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {item.userRole}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {typeof item.amount === "number"
+                    ? peso(item.amount)
+                    : item.amount}
+                </td>
               </>
             )}
           </tr>
         ))}
       </Table>
 
-      {/* Pagination */}
       {!isLoading && (
-        <div className="mt-3 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+        <div className="mt-3 flex items-center justify-between text-sm">
+          <div className="text-gray-600">
             Showing{" "}
             <span className="font-medium">
               {sourceData.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
@@ -646,27 +1239,29 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
             <span className="font-medium">
               {Math.min((page - 1) * PAGE_SIZE + PAGE_SIZE, sourceData.length)}
             </span>{" "}
-            of <span className="font-medium">{sourceData.length}</span> results
+            of{" "}
+            <span className="font-medium">{sourceData.length}</span> results
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              className="px-3 py-1 rounded-md border text-sm disabled:opacity-50"
+              className="px-2.5 py-1 rounded-md border text-xs disabled:opacity-50"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
             >
               Prev
             </button>
 
-            {/* Compact numbered pages */}
             <div className="flex items-center gap-1">
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .slice(Math.max(0, page - 3), Math.max(0, page - 3) + 5)
                 .map((p) => (
                   <button
                     key={p}
-                    className={`px-3 py-1 rounded-md border text-sm ${
-                      p === page ? "bg-primaryYellow text-white border-primaryYellow" : ""
+                    className={`px-2.5 py-1 rounded-md border text-xs ${
+                      p === page
+                        ? "bg-primaryYellow text-white border-primaryYellow"
+                        : ""
                     }`}
                     onClick={() => setPage(p)}
                   >
@@ -676,7 +1271,7 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
             </div>
 
             <button
-              className="px-3 py-1 rounded-md border text-sm disabled:opacity-50"
+              className="px-2.5 py-1 rounded-md border text-xs disabled:opacity-50"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
             >
@@ -687,4 +1282,6 @@ export default function ReportTable({ selectedOption, dateRange = "all" }) {
       )}
     </div>
   );
-}
+});
+
+export default ReportTable;

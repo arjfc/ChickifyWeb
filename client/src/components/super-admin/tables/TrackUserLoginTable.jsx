@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import dayjs from "dayjs";
 import { fetchLastSignins } from "@/services/activityLogs";
 
-export default function TrackUserTable({ limit = 20, userrole = "All", date = "all" }) {
+// PDF libs
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+const TrackUserTable = forwardRef(function TrackUserTable(
+  { limit = 20, userrole = "All", date = "all" },
+  ref
+) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,10 +46,8 @@ export default function TrackUserTable({ limit = 20, userrole = "All", date = "a
     (async () => {
       try {
         setLoading(true);
-
         const { start, end } = computeRange(date);
         const roleFilter = userrole && userrole !== "All" ? userrole : null;
-
         const data = await fetchLastSignins({
           limit,
           offset: 0,
@@ -50,7 +55,6 @@ export default function TrackUserTable({ limit = 20, userrole = "All", date = "a
           s_date: start,
           e_date: end,
         });
-
         if (!off) setRows(data ?? []);
       } catch (e) {
         console.error("Failed to fetch last sign-ins:", e);
@@ -76,10 +80,91 @@ export default function TrackUserTable({ limit = 20, userrole = "All", date = "a
         })
       : "—";
 
+  // ===== Unicode font (optional, consistent) =====
+  const FONT_NAME = "NotoSans";
+  const FONT_FILE = "NotoSans-Regular.ttf";
+  const FONT_URL = "/fonts/NotoSans-Regular.ttf";
+
+  const arrayBufferToBase64 = (buffer) => {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+
+  const ensureUnicodeFont = async (doc) => {
+    try {
+      const res = await fetch(FONT_URL);
+      if (!res.ok) throw new Error(`Font fetch failed (${res.status})`);
+      const buf = await res.arrayBuffer();
+      const base64 = arrayBufferToBase64(buf);
+      doc.addFileToVFS(FONT_FILE, base64);
+      doc.addFont(FONT_FILE, FONT_NAME, "normal");
+      doc.setFont(FONT_NAME, "normal");
+      return true;
+    } catch (e) {
+      console.warn("[TrackUserTable] Unicode font not loaded:", e?.message || e);
+      return false;
+    }
+  };
+
+  // ===== Expose export API =====
+  useImperativeHandle(ref, () => ({
+    async exportPdf(meta = {}) {
+      const {
+        title = "Chickify Track Last Sign-ins",
+        subtitle = `${userrole} • ${date}`,
+        filename = `user_signins_${userrole}_${date}.pdf`,
+      } = meta;
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+      const hasUnicode = await ensureUnicodeFont(doc);
+
+      const marginX = 40;
+      let cursorY = 40;
+
+      // Title
+      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text(title, marginX, cursorY);
+      cursorY += 22;
+
+      // Subtitle
+      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+      doc.setFontSize(12);
+      doc.text(subtitle, marginX, cursorY);
+      cursorY += 12;
+
+      const body = (rows || []).map((r) => [
+        fmt(r.last_sign_in_at || r.created_at),
+        r.role_name ?? "—",
+        r.actor_user || "(no name)",
+        r.email || "—",
+        fmt(r.created_at),
+      ]);
+
+      autoTable(doc, {
+        startY: cursorY + 8,
+        head: [headers],
+        body,
+        styles: { font: hasUnicode ? FONT_NAME : "helvetica", fontSize: 9, cellPadding: 4, halign: "center" },
+        headStyles: { fillColor: [255, 210, 77], textColor: [33, 33, 33] },
+        didDrawPage: () => {
+          const pageSize = doc.internal.pageSize;
+          const pageHeight = pageSize.height || pageSize.getHeight();
+          doc.setFontSize(10);
+          doc.text(`Page ${doc.getNumberOfPages()}`, marginX, pageHeight - 20);
+        },
+      });
+
+      doc.save(filename);
+    },
+  }));
+
   if (loading) return <div className="text-center py-6">Loading user sign-ins…</div>;
 
   return (
-    <div className="max-h-[480px] overflow-auto rounded-md border border-gray-200">
+    <div className="max-h:[480px] overflow-auto rounded-md border border-gray-200">
       <table className="min-w-full text-sm">
         <thead className="sticky top-0 z-10">
           <tr className="bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 text-yellow-500 border-b border-gray-300">
@@ -114,4 +199,6 @@ export default function TrackUserTable({ limit = 20, userrole = "All", date = "a
       </table>
     </div>
   );
-}
+});
+
+export default TrackUserTable;

@@ -2,7 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../../../components/Card";
 import { IoFilterOutline } from "react-icons/io5";
+import { FaCircleInfo } from "react-icons/fa6";
 import ProductTable from "../../../components/admin/tables/ProductTable";
+import SmallCard from "../../../components/super-admin/SmallCard";
 import Modal from "react-modal";
 import TrayEggImg from "../../../assets/tray-egg.png";
 
@@ -70,6 +72,36 @@ const modalBaseStyle = {
   overlay: { backgroundColor: "rgba(0,0,0,0.8)", zIndex: 1000 },
 };
 
+// Info modal for "Price per Tray"
+const modalStyle2 = {
+  content: {
+    top: "50%",
+    left: "50%",
+    right: "auto",
+    bottom: "auto",
+    transform: "translate(-50%, -50%)",
+    borderRadius: 20,
+    padding: 10,
+    maxHeight: "100vh",
+    width: "25vw",
+    minWidth: 320,
+    overflow: "visible",
+  },
+  overlay: {
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    zIndex: 1000,
+  },
+};
+
+// Static base price guide (just a visual reference for admins)
+const basePriceSizes = [
+  { size: "Extra Large", id: "xl", number: 220 },
+  { size: "Large", id: "lg", number: 200 },
+  { size: "Medium", id: "md", number: 180 },
+  { size: "Small", id: "sm", number: 150 },
+  { size: "Extra Small", id: "xs", number: 120 },
+];
+
 export default function ProductDetails() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -98,6 +130,10 @@ export default function ProductDetails() {
 
   const [previewUrl, setPreviewUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  // base price info modal
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const handleInfoModal = () => setIsInfoModalOpen((s) => !s);
 
   // toast state
   const [toast, setToast] = useState(null);
@@ -294,7 +330,7 @@ export default function ProductDetails() {
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* LEFT CARD */}
+        {/* LEFT + RIGHT cards */}
         <div className="flex flex-col gap-5 lg:flex-row w-full col-span-2">
           <Card>
             <div className="flex flex-col gap-3">
@@ -377,6 +413,35 @@ export default function ProductDetails() {
           </Card>
         </div>
 
+        {/* CURRENT BASE PRICE CARD (guide) */}
+        <div className="col-span-2">
+          <div className="flex flex-col gap-3 p-4 rounded-lg border border-gray-200 shadow-lg">
+            <div className="flex flex-row justify-between items-center">
+              <div className="flex flex-row gap-2 items-center">
+                <h1 className="text-lg md:text-xl text-primaryYellow font-semibold">
+                  Current Base Price of Tray
+                </h1>
+                <FaCircleInfo
+                  onClick={handleInfoModal}
+                  className="text-base text-gray-400 cursor-pointer"
+                  title="What is Price per Tray?"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
+              {basePriceSizes.map((data) => (
+                <SmallCard
+                  size={data.size}
+                  id={data.id}
+                  key={data.id}
+                  number={data.number}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* TABLE + Add button */}
         <div className="col-span-2 p-4 sm:p-6 rounded-lg border border-gray-200 shadow-lg overflow-x-auto">
           <div className="flex justify-end mb-3">
@@ -394,7 +459,7 @@ export default function ProductDetails() {
           />
         </div>
 
-        {/* MODAL */}
+        {/* PRODUCT MODAL */}
         <Modal
           isOpen={isModalOpen}
           onRequestClose={() => setIsModalOpen(false)}
@@ -654,6 +719,33 @@ export default function ProductDetails() {
               >
                 Save Changes
               </button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* INFO MODAL: Price per Tray explanation */}
+        <Modal
+          isOpen={isInfoModalOpen}
+          onRequestClose={handleInfoModal}
+          style={modalStyle2}
+          ariaHideApp={false}
+        >
+          <div className="flex flex-col gap-5 items-center justify-center p-6">
+            <h1 className="text-primaryYellow font-bold text-xl">
+              Price Per Tray
+            </h1>
+            <p className="font-semibold opacity-70 text-center text-sm">
+              Price per Tray refers to the cost assigned to one standard tray of
+              eggs (typically 30 pieces). It serves as the base unit for pricing
+              in egg sales. This metric is commonly used in poultry trading
+              because it standardizes egg pricing, making it simple to compare,
+              track, and adjust prices across markets.
+            </p>
+            <div
+              onClick={handleInfoModal}
+              className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90 w-full text-center"
+            >
+              <p className="text-lg">Okay</p>
             </div>
           </div>
         </Modal>

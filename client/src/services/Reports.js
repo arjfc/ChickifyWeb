@@ -45,7 +45,10 @@ function resolveRange(dateRange) {
       const m = now.getMonth(); // 0-11
       const firstOfLast = new Date(y, m - 1, 1);
       const lastOfLast = new Date(y, m, 0);
-      return { since: ymd(startOfDay(firstOfLast)), until: ymd(endOfDay(lastOfLast)) };
+      return {
+        since: ymd(startOfDay(firstOfLast)),
+        until: ymd(endOfDay(lastOfLast)),
+      };
     }
     case "all":
     default:
@@ -129,10 +132,16 @@ export async function fetchAdminSalesRecords(params = {}) {
       if (!error) return Array.isArray(data) ? data : [];
       // If it errors due to unexpected params, we'll fall through to the no-arg call
       // eslint-disable-next-line no-console
-      console.warn("[view_admin_sales_records] param call failed, falling back:", error.message);
+      console.warn(
+        "[view_admin_sales_records] param call failed, falling back:",
+        error.message
+      );
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.warn("[view_admin_sales_records] param call threw, falling back:", e?.message || e);
+      console.warn(
+        "[view_admin_sales_records] param call threw, falling back:",
+        e?.message || e
+      );
     }
   }
 
@@ -175,7 +184,8 @@ export async function fetchPayoutOverviewAdmin(payoutId = null) {
  * Convenience helpers if you prefer explicit calls
  */
 export const fetchPayoutOverviewList = () => fetchPayoutOverviewAdmin(null);
-export const fetchPayoutOverviewOne = (payoutId) => fetchPayoutOverviewAdmin(payoutId);
+export const fetchPayoutOverviewOne = (payoutId) =>
+  fetchPayoutOverviewAdmin(payoutId);
 
 /* ---------- Optional quick ranges ---------- */
 export const todayRange = () => {
@@ -193,3 +203,29 @@ export const last7Days = () => {
     until: end.toISOString().slice(0, 10),
   };
 };
+
+export async function fetchFarmersUnderCoop(adminId, status = "approved") {
+  if (!adminId)
+    throw new Error("[view_farmers_under_coop] adminId is required");
+
+  // ✅ map to the right rpc param names and order
+  const { data, error } = await supabase.rpc("view_farmers_under_coop", {
+    p_admin_id: adminId, // uuid FIRST
+    p_status: status, // text SECOND (use null to ignore)
+  });
+
+  if (error) throw new Error(`[view_farmers_under_coop] ${error.message}`);
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Convenience wrapper that uses the caller’s auth.uid()
+ */
+export async function fetchMyFarmersList(status = "approved") {
+  const { data: userRes, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userRes?.user?.id)
+    throw userErr ?? new Error("Not authenticated");
+
+  const adminId = userRes.user.id; // must match v_admin_id.admin_id
+  return fetchFarmersUnderCoop(adminId, status);
+}

@@ -739,4 +739,3 @@ export default function EggSupplyTable() {
 //     </div>
 //   );
 // }
-

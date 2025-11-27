@@ -1,17 +1,17 @@
+// pages/admin/dashboard/index.jsx
 import React, { useEffect, useState } from "react";
 import { MdKeyboardArrowRight } from "react-icons/md";
 import { LuUserRound, LuPackageOpen } from "react-icons/lu";
 import { IoBarChartOutline, IoInformationCircleOutline } from "react-icons/io5";
-
 
 import DashboardCard from "@/components/DashboardCard";
 import LineChart from "@/components/Charts/Admin/LineChart";
 import BarChart from "@/components/Charts/Admin/BarChart";
 import DonutChart from "@/components/Charts/Admin/DonutChart";
 import PriceForecastChart from "@/components/Charts/Admin/PriceForecastChart";
-
 import EggProductionChart from "@/components/Charts/Admin/EggProductionChart";
 import Sales30Chart from "@/components/Charts/Admin/Sales30Chart";
+import IncomeDonutChart from "@/components/Charts/Admin/IncomeDonutChart";
 
 import { insights } from "@/constants/mockData";
 
@@ -23,6 +23,8 @@ import {
   getAdminOrderStatusBuckets,
   getCebuSeasonalPricesLocal,
   getEggProductionTimeseries,
+  getAdminGrossIncomeBreakdown,
+  getAdminNetIncomeBreakdown,
 } from "@/services/analytics";
 
 export default function AdminDashboard() {
@@ -30,7 +32,7 @@ export default function AdminDashboard() {
     total_active_users: 0,
     total_sales_today: 0,
     total_egg_trays: 0,
-    total_farmers: 0, // 👈 NEW
+    total_farmers: 0,
   });
 
   const [salesTrend, setSalesTrend] = useState([]);
@@ -45,6 +47,18 @@ export default function AdminDashboard() {
 
   const [eggProduction, setEggProduction] = useState([]);
   const [forecast, setForecast] = useState([]);
+
+  // NEW: gross & net income donut data
+  const [grossIncomeDonut, setGrossIncomeDonut] = useState({
+    labels: [],
+    series: [],
+    raw: [],
+  });
+  const [netIncomeDonut, setNetIncomeDonut] = useState({
+    labels: [],
+    series: [],
+    raw: [],
+  });
 
   const [remitBalance] = useState(0);
 
@@ -110,6 +124,24 @@ export default function AdminDashboard() {
         console.error("[egg-production error]:", e);
       }
 
+      // NEW: Gross income donut
+      try {
+        const gi = await getAdminGrossIncomeBreakdown();
+        setGrossIncomeDonut(gi);
+      } catch (e) {
+        console.error("[gross income donut error]:", e);
+        setGrossIncomeDonut({ labels: [], series: [], raw: [] });
+      }
+
+      // NEW: Net income donut
+      try {
+        const ni = await getAdminNetIncomeBreakdown();
+        setNetIncomeDonut(ni);
+      } catch (e) {
+        console.error("[net income donut error]:", e);
+        setNetIncomeDonut({ labels: [], series: [], raw: [] });
+      }
+
       const yr = new Date().getFullYear();
       setForecast(getCebuSeasonalPricesLocal(yr, 300));
     })();
@@ -156,28 +188,39 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* DONUTS + REMIT */}
+      {/* GROSS + NET INCOME + REMIT */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* GROSS INCOME */}
         <div className="col-span-1 lg:col-span-2 p-6 rounded-lg border shadow-lg">
-          <div className="mb-3 font-semibold text-gray-700">Gross Income</div>
-          <DonutChart
-            data={{
-              labels: ["Source A", "Source B", "Source C"],
-              series: [55, 30, 15],
-            }}
-          />
+          <div className="mb-1 text-sm text-gray-500">Gross Income</div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-base font-semibold text-gray-800">
+              Order Status
+            </h3>
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600">
+              <span className="text-[10px]">📈</span> +0%
+            </span>
+          </div>
+
+          <IncomeDonutChart data={grossIncomeDonut} />
         </div>
 
+        {/* NET INCOME */}
         <div className="col-span-1 p-6 rounded-lg border shadow-lg">
-          <div className="mb-3 font-semibold text-gray-700">Net Income</div>
-          <DonutChart
-            data={{
-              labels: ["After Fees", "Adjustments"],
-              series: [75, 25],
-            }}
-          />
+          <div className="mb-1 text-sm text-gray-500">Net Income</div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-base font-semibold text-gray-800">
+              Order Status
+            </h3>
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600">
+              <span className="text-[10px]">📈</span> +0%
+            </span>
+          </div>
+
+          <IncomeDonutChart data={netIncomeDonut} />
         </div>
 
+        {/* REMITTANCE CARD */}
         <div className="col-span-1 p-6 rounded-lg border shadow-lg flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
@@ -235,14 +278,12 @@ export default function AdminDashboard() {
               <MdKeyboardArrowRight className="absolute top-3 right-3 w-8 h-8" />
             </div>
           ))}
-
-          
         </div>
       </div>
 
       {/* GROWTH + ORDER STATUS */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="col-span-1 lg:col-span-3 p-6 rounded-lg border shadow-lg">
+        <div className="col-span-1 lg:grid-cols-3 lg:col-span-3 p-6 rounded-lg border shadow-lg">
           <BarChart data={growth} />
         </div>
         <div className="col-span-1 flex flex-col p-6 rounded-lg border shadow-lg">
@@ -253,7 +294,9 @@ export default function AdminDashboard() {
       {/* EGG PRODUCTION + SALES 30 DAYS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="p-6 rounded-lg border shadow-lg">
-          <div className="mb-3 font-semibold">Egg Production (Last 30 Days)</div>
+          <div className="mb-3 font-semibold">
+            Egg Production (Last 30 Days)
+          </div>
           <EggProductionChart data={eggProduction} />
         </div>
 
@@ -282,8 +325,8 @@ export default function AdminDashboard() {
             </div>
 
             <p className="text-sm text-gray-700">
-              Remittance Balance is the total amount your co-op must remit to the
-              Super Admin.
+              Remittance Balance is the total amount your co-op must remit to
+              the Super Admin.
             </p>
 
             <div className="mt-4 flex justify-end">
@@ -338,7 +381,11 @@ export default function AdminDashboard() {
                 <label className="block text-sm font-medium">
                   Proof of Remittance
                 </label>
-                <input type="file" accept="image/*" onChange={handleFileChange} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                />
                 {preview && (
                   <img
                     src={preview}
