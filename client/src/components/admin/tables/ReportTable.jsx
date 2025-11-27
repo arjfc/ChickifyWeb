@@ -3,7 +3,7 @@
 import React, {useEffect,useMemo,useState,forwardRef,useImperativeHandle,} from "react";
 import Table from "../../Table";
 import {fetchEggProduction,fetchEggBatch,fetchAdminSalesRecords,fetchPayoutOverviewList,fetchMyFarmersList,} from "@/services/Reports";
-import { fetchTransactionsByAdmin } from "@/services/TransactionLogs";
+import { fetchTransactionsByAdmin, fetchFeesCollectedByAdmin, } from "@/services/TransactionLogs";
 
 // pdf libs
 import jsPDF from "jspdf";

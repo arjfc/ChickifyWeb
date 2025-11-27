@@ -45,3 +45,15 @@ export async function uploadRemittanceProof(file) {
 
   return data.publicUrl;
 }
+
+
+/*** Superadmin: view all remittances that admins remitted.*/
+export async function fetchAllRemittances() {
+  const { data, error } = await supabase.rpc("view_all_remittances");
+
+  if (error) {
+    console.error("[fetchAllRemittances] Error fetching remittances:", error);
+    throw error;
+  }
+  return data || [];
+}

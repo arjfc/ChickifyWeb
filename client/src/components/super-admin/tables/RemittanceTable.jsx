@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Table from "../../Table";
 import { FaCircleInfo } from "react-icons/fa6";
 import Modal from "react-modal";
+import { fetchAllRemittances } from "@/services/Remittance";
 
 const modalStyle = {
   content: {
@@ -22,31 +23,6 @@ const modalStyle = {
   },
 };
 
-// 🔹 Sample data (replace with your real data)
-const rows = [
-  {
-    name: "Maria Lopez",
-    date: "10/02/2025",
-    amount: 520,
-    proofUrl:
-      "https://images.unsplash.com/photo-1516570161787-2fd917215a3d?q=80&w=1600&auto=format&fit=crop",
-  },
-  {
-    name: "Juan Dela Cruz",
-    date: "10/05/2025",
-    amount: 1300,
-    proofUrl:
-      "https://images.unsplash.com/photo-1585386959984-a4155223168f?q=80&w=1600&auto=format&fit=crop",
-  },
-  {
-    name: "Ana Santos",
-    date: "10/08/2025",
-    amount: 260,
-    proofUrl:
-      "https://images.unsplash.com/photo-1495020689067-958852a7765e?q=80&w=1600&auto=format&fit=crop",
-  },
-];
-
 const peso = (n) =>
   typeof n === "number"
     ? `₱${n.toLocaleString(undefined, {
@@ -55,11 +31,17 @@ const peso = (n) =>
       })}`
     : "₱0.00";
 
+const formatDate = (d) =>
+  d ? new Date(d).toLocaleDateString("en-PH") : "";
+
 export default function ProofTable() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [proofSrc, setProofSrc] = useState("");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const headers = ["Name", "Date", "Amount", "View Proof"];
+  // ⬅️ Added "Coop Name"
+  const headers = ["Coop Name", "Date", "Amount", "Memo", "View Proof"];
 
   const openProof = (src) => {
     setProofSrc(src || "");
@@ -71,28 +53,79 @@ export default function ProofTable() {
     setProofSrc("");
   };
 
+  useEffect(() => {
+    const loadRemittances = async () => {
+      try {
+        const data = await fetchAllRemittances();
+        setRows(data || []);
+      } catch (err) {
+        console.error("[ProofTable] Failed to load remittances:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRemittances();
+  }, []);
+
   return (
     <>
       <Table headers={headers}>
-        {rows.map((item, idx) => (
-          <tr
-            key={idx}
-            className="bg-yellow-100 text-gray-700 rounded-lg shadow-sm transition"
-          >
-            <td className="px-4 py-3 text-center font-medium">{item.name}</td>
-            <td className="px-4 py-3 text-center">{item.date}</td>
-            <td className="px-4 py-3 text-center font-semibold">
-              {peso(item.amount)}
-            </td>
+        {loading ? (
+          <tr>
             <td
-              onClick={() => openProof(item.proofUrl)}
-              className="cursor-pointer px-4 py-3 flex items-center justify-center text-gray-400 hover:text-gray-600"
-              title="View Proof"
+              className="px-4 py-3 text-center text-gray-500"
+              colSpan={headers.length}
             >
-              <FaCircleInfo />
+              Loading remittances…
             </td>
           </tr>
-        ))}
+        ) : rows.length === 0 ? (
+          <tr>
+            <td
+              className="px-4 py-3 text-center text-gray-500"
+              colSpan={headers.length}
+            >
+              No remittances found.
+            </td>
+          </tr>
+        ) : (
+          rows.map((item) => (
+            <tr
+              key={item.ledger_id}
+              className="bg-yellow-100 text-gray-700 rounded-lg shadow-sm transition"
+            >
+              {/* COOP NAME */}
+              <td className="px-4 py-3 text-center font-medium">
+                {item.coop_name || "—"}
+              </td>
+
+              {/* DATE */}
+              <td className="px-4 py-3 text-center">
+                {formatDate(item.created_at)}
+              </td>
+
+              {/* AMOUNT */}
+              <td className="px-4 py-3 text-center font-semibold">
+                {peso(item.amount)}
+              </td>
+
+              {/* MEMO */}
+              <td className="px-4 py-3 text-center">
+                {item.memo || "—"}
+              </td>
+
+              {/* VIEW PROOF */}
+              <td
+                onClick={() => openProof(item.img)}
+                className="cursor-pointer px-4 py-3 flex items-center justify-center text-gray-400 hover:text-gray-600"
+                title="View Proof"
+              >
+                <FaCircleInfo />
+              </td>
+            </tr>
+          ))
+        )}
       </Table>
 
       <Modal
