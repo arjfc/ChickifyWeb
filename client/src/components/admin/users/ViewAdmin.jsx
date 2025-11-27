@@ -1,95 +1,138 @@
+// src/pages/admin/users/ViewAdmin.jsx (or wherever this lives)
+import React, { useEffect, useState } from "react";
 import { FaUserCircle } from "react-icons/fa";
 import { useLocation, useNavigate } from "react-router-dom";
-
+import { fetchFarmerDetails } from "../../../services/FarmerRequests";
 function ViewAdmin() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = location.state || {};
+  const { user } = location.state || {}; // { email, name, id } from UserFarmerTable
 
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // If no user passed via state
   if (!user) return <p>No user data provided</p>;
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await fetchFarmerDetails(user.id);
+        if (!mounted) return;
+        setDetails(data);
+      } catch (e) {
+        if (!mounted) return;
+        console.error("Failed to load farmer details:", e);
+        setError(e.message || "Failed to load farmer details.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user.id]);
+
+  const displayName = details?.name || user.name || "";
+  const email = user.email || "";
+  const sex = details?.sex || "";
+  const phoneNumber = details?.phoneNumber || "";
+  const address = details?.address || "";
 
   return (
     <div className="w-full">
       {/* Card */}
       <div className="mt-10 ml-0 w-full max-w-8xl rounded-2xl border border-gray-300 bg-white px-12 pt-10 pb-12 shadow-lg">
         {/* Header */}
-        <div className="flex flex-row gap-3 items-center">
+        <div className="flex flex-row gap-3 items-center mb-6">
           <FaUserCircle className="w-16 h-16 text-gray-400" />
           <div className="flex flex-col">
             <p className="text-lg font-semibold text-primaryYellow">
-              {user.name}
+              {displayName}
             </p>
-            <p className="text-sm text-gray-600">@{user.username}</p>
+            {/* You don’t have username in RPC, and you’re not passing it in state,
+                so we can either hide this or fall back to email */}
+            <p className="text-sm text-gray-600">
+              @{user.username || email || "farmer"}
+            </p>
           </div>
         </div>
 
+        {loading && (
+          <p className="text-sm text-gray-500 mb-4">Loading farmer details…</p>
+        )}
+        {error && (
+          <p className="text-sm text-red-500 mb-4">{error}</p>
+        )}
+
         {/* Fields */}
-        <div className="space-y-6">
-          {/* Row 1: Email, Sex, Phone Number */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex flex-col gap-1">
-              <label className="block text-sm font-semibold text-gray-400">
-                E-mail
-              </label>
-              <input
-                type="text"
-                value={user.email}
-                readOnly
-                className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="block text-sm font-semibold text-gray-400">
-                Sex
-              </label>
-              <select
-                defaultValue={user.sex || ""}
+        {!loading && !error && (
+          <div className="space-y-6">
+            {/* Row 1: Email, Sex, Phone Number */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="flex flex-col gap-1">
+                <label className="block text-sm font-semibold text-gray-400">
+                  E-mail
+                </label>
+                <input
+                  type="text"
+                  value={email}
+                  readOnly
+                  className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="block text-sm font-semibold text-gray-400">
+                  Sex
+                </label>
+               <select
+                value={sex}
+                disabled
                 className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-white text-gray-600 focus:outline-none"
               >
                 <option value="">Select</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="block text-sm font-semibold text-gray-400">
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                value={user.phoneNumber}
-                readOnly
-                className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none"
-              />
-            </div>
-          </div>
+              </div>
 
-          {/* Row 2: Address + Farm Location */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex flex-col gap-1 md:col-span-2">
-              <label className="block text-sm font-semibold text-gray-400">
-                Address
-              </label>
-              <textarea
-                rows={2}
-                defaultValue={user.address}
-                readOnly
-                className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none resize-none"
-              />
+              <div className="flex flex-col gap-1">
+                <label className="block text-sm font-semibold text-gray-400">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  readOnly
+                  className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none"
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-1 md:col-span-2">
-              <label className="block text-sm font-semibold text-gray-400">
-                Farm Location
-              </label>
-              <textarea
-                rows={2}
-                defaultValue={user.farmLoc}
-                readOnly
-                className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none resize-none"
-              />
+
+            {/* Row 2: Address + Farm Location */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="flex flex-col gap-1 md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-400">
+                  Address
+                </label>
+                <textarea
+                  rows={2}
+                  value={address}
+                  readOnly
+                  className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none resize-none"
+                />
+              </div>
+
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Back Button */}
@@ -107,7 +150,6 @@ function ViewAdmin() {
 
 export default ViewAdmin;
 
-
 // import { FaUserCircle } from "react-icons/fa";
 // import { useLocation, useNavigate } from "react-router-dom";
 
@@ -119,10 +161,9 @@ export default ViewAdmin;
 //   if (!user) return <p>No user data provided</p>;
 
 //   return (
-//     <div className="flex flex-col gap-6 p-4 sm:p-6">
+//     <div className="w-full">
 //       {/* Card */}
-//       <div className="w-full max-w-5xl mx-auto px-6 sm:px-10 py-6 sm:py-10 flex flex-col gap-6 rounded-lg border border-gray-200 shadow-lg bg-white">
-        
+//       <div className="mt-10 ml-0 w-full max-w-8xl rounded-2xl border border-gray-300 bg-white px-12 pt-10 pb-12 shadow-lg">
 //         {/* Header */}
 //         <div className="flex flex-row gap-3 items-center">
 //           <FaUserCircle className="w-16 h-16 text-gray-400" />
@@ -182,7 +223,7 @@ export default ViewAdmin;
 //                 Address
 //               </label>
 //               <textarea
-//                 rows={3}
+//                 rows={2}
 //                 defaultValue={user.address}
 //                 readOnly
 //                 className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none resize-none"
@@ -193,7 +234,7 @@ export default ViewAdmin;
 //                 Farm Location
 //               </label>
 //               <textarea
-//                 rows={3}
+//                 rows={2}
 //                 defaultValue={user.farmLoc}
 //                 readOnly
 //                 className="w-full px-3 py-2 rounded-md shadow-sm border border-gray-300 bg-gray-50 text-gray-600 focus:outline-none resize-none"
@@ -206,7 +247,7 @@ export default ViewAdmin;
 //       {/* Back Button */}
 //       <div className="flex items-center justify-center">
 //         <button
-//           className="cursor-pointer text-base sm:text-lg rounded-lg text-white font-bold text-center bg-primaryYellow px-6 sm:px-10 py-2 sm:py-3 hover:opacity-90"
+//           className="cursor-pointer text-base mt-5 sm:text-md rounded-lg text-white font-bold text-center bg-primaryYellow px-6 sm:px-10 py-2 sm:py-3 hover:opacity-90"
 //           onClick={() => navigate("/admin/users")}
 //         >
 //           Back
