@@ -1,59 +1,163 @@
+// pages/super-admin/dashboard/index.jsx
+import { useEffect, useState } from "react";
+
 import DashboardCard from "../../../components/DashboardCard";
 import { LuPackageOpen, LuUserRound } from "react-icons/lu";
-import { FaBell } from "react-icons/fa6";
-import { SYSTEM_ALERTS } from "../../../constants/mockData";
+import { IoBarChartOutline } from "react-icons/io5";
 import { MdKeyboardArrowRight } from "react-icons/md";
+
 import SalesTrendChart from "../../../components/Charts/SalesTrend";
 import RecentActivities from "../../../components/super-admin/RecentActivities";
-import { IoBarChartOutline } from "react-icons/io5";
+
+import {
+  getUserCounts,
+  getTotalProducts,
+  getSalesToday,
+  getCompletedOrders,
+  getTotalAdminFees,
+} from "@/services/SuperAdminAnalytics";
+
+// small helper to be extra-safe
+const asNumber = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
 
 export default function SuperAdminDashboard() {
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-4 xl:grid-rows-[auto_1fr_auto]  gap-6">
-      {/* Row 1 */}
-      <DashboardCard
-        title="Total Active Users"
-        icon={<LuUserRound className="text-6xl text-primaryYellow" />}
-        data={15300}
-      />
-      <DashboardCard
-        title="Total Sales Today"
-        icon={<IoBarChartOutline className="text-6xl text-primaryYellow" />}
-        data={15300}
-      />
-      <DashboardCard
-        title="Total Product List"
-        icon={<LuPackageOpen className="text-6xl text-primaryYellow" />}
-        data={12345}
-      />
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
-      {/* System Alerts (row-span-3 works now) */}
-      <div className="row-span-3 col-span-1 flex flex-col gap-4 p-6 rounded-lg border border-gray-200 shadow-lg h-full">
-        <div className="text-primaryYellow flex flex-row gap-2 items-center justify-center">
-          <FaBell className="text-2xl" />
-          <p className="text-2xl font-bold">System Alerts</p>
-        </div>
-        {SYSTEM_ALERTS.slice(0, 8).map((data) => (
-          <div
-            key={data.id}
-            className="relative bg-softPrimaryYelllow p-4 rounded-xl cursor-pointer"
-          >
-            {data.title}
-            <MdKeyboardArrowRight className="absolute top-3 right-3 w-8 h-8" />
-          </div>
-        ))}
-        <div className="flex flex-row gap-2 items-center justify-center text-gray-400 cursor-pointer">
-          <p className="text-base">View More</p>
-          <MdKeyboardArrowRight className="w-5 h-5" />
-        </div>
+  const [stats, setStats] = useState({
+    admins: 0,
+    farmers: 0,
+    buyers: 0,
+    products: 0,
+    salesToday: 0,
+    completedOrders: 0,
+   
+    adminFees: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAnalytics() {
+      try {
+        setLoading(true);
+        setLoadError(null);
+
+        const [
+          userCounts,
+          totalProducts,
+          salesToday,
+          completedOrders,
+          adminFees,
+        ] = await Promise.all([
+          getUserCounts(),
+          getTotalProducts(),
+          getSalesToday(),
+          getCompletedOrders(),
+          getTotalAdminFees(),
+        ]);
+
+        if (cancelled) return;
+
+        setStats({
+          admins: asNumber(userCounts.admins),
+          farmers: asNumber(userCounts.farmers),
+          buyers: asNumber(userCounts.buyers),
+          products: asNumber(totalProducts),
+          salesToday: asNumber(salesToday),
+          completedOrders: asNumber(completedOrders),
+         
+          adminFees: asNumber(adminFees),
+        });
+      } catch (err) {
+        if (cancelled) return;
+        console.error("[SuperAdminDashboard] analytics error:", err);
+        setLoadError(err.message || "Failed to load analytics.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadAnalytics();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="w-full flex justify-center items-center py-10">
+        <p className="text-gray-500 text-sm">Loading analytics…</p>
       </div>
+    );
+  }
 
-      {/* Sales Chart (aligns with Alerts) */}
-      <div className="col-span-1 xl:col-span-3 row-span-2 p-6 rounded-lg border border-gray-200 shadow-lg h-full">
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-4 xl:grid-rows-[auto_auto_1fr] gap-6">
+      {loadError && (
+        <div className="xl:col-span-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          {loadError}
+        </div>
+      )}
+
+      {/* Row 1 — user & product overview */}
+      <DashboardCard
+        title="Active Admin Users"
+        icon={<LuUserRound className="text-6xl text-primaryYellow" />}
+        data={stats.admins}
+      />
+
+      <DashboardCard
+        title="Active Farmers"
+        icon={<LuUserRound className="text-6xl text-primaryYellow" />}
+        data={stats.farmers}
+      />
+
+      <DashboardCard
+        title="Active Buyers"
+        icon={<LuUserRound className="text-6xl text-primaryYellow" />}
+        data={stats.buyers}
+      />
+
+      <DashboardCard
+        title="Total Products"
+        icon={<LuPackageOpen className="text-6xl text-primaryYellow" />}
+        data={stats.products}
+      />
+
+      {/* Row 2 — revenue & payouts */}
+      <DashboardCard
+        title="Sales Today (₱)"
+        icon={<IoBarChartOutline className="text-6xl text-primaryYellow" />}
+        data={stats.salesToday}
+      />
+
+      <DashboardCard
+        title="Total Completed Orders"
+        icon={<MdKeyboardArrowRight className="text-6xl text-primaryYellow" />}
+        data={stats.completedOrders}
+      />
+
+      <DashboardCard
+        title="Pending Payout Requests"
+        icon={<MdKeyboardArrowRight className="text-6xl text-primaryYellow" />}
+        data={stats.completedOrders}
+      />
+
+      <DashboardCard
+        title="Admin Fees Collected (₱)"
+        icon={<IoBarChartOutline className="text-6xl text-primaryYellow" />}
+        data={stats.adminFees}
+      />
+
+      {/* Row 3 — sales trend & activities */}
+      <div className="col-span-1 xl:col-span-4 p-6 rounded-lg border border-gray-200 shadow-lg h-full">
         <SalesTrendChart />
       </div>
 
-      {/* Recent Activities (full width at bottom) */}
       <div className="col-span-1 xl:col-span-4 p-6 rounded-lg border border-gray-200 shadow-lg">
         <RecentActivities />
       </div>

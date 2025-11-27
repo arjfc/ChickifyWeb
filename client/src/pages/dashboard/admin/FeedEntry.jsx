@@ -1,234 +1,343 @@
-//FeedEntry.jsx
+// pages/admin/OrderStatus.jsx
+import React, { useEffect, useState, useMemo } from "react";
+import { IoChevronDown } from "react-icons/io5";
+import { useNavigate } from "react-router-dom";
+import Modal from "react-modal";
 
-import React, { useState } from "react";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { IoAdd } from "react-icons/io5";
+import OrderTable from "../../../components/admin/tables/OrderTable";
+import EggSupplyTable from "../../../components/admin/tables/EggSupplyTable";
+import EggAllocationHistory from "../../../components/admin/tables/OrderAllocation";
+import EggAllocation from "../../../components/admin/tables/EggAllocation";
+import SelectedOrderCard from "../../../components/admin/tables/SelectedOrderCard";
 
-import FeedAllocationList from "@/components/admin/tables/FeedAllocationList";
-import FarmersAllocation from "@/components/admin/tables/FarmersAllocation";
-import FeedMonitoringTable from "@/components/admin/tables/FeedMonitoringTable";
-import FeedEntryTable from "@/components/admin/tables/FeedEntryTable";
-import { addFeedTypeForCoop } from "../../../services/FeedEntry";
+import {
+  getOrderStatusCounts,
+  adminMarkOrderToShip,
+  adminMarkManyDeliveredDetailed, // <-- detailed batch helper
+} from "@/services/OrderNAllocation";
 
-function SelectionSummary({ farmersCount, purchase }) {
-  return (
-    <div className="rounded-lg bg-gradient-to-r from-yellow-50 to-orange-50 border-l-4 border-[#F6C32B] p-3 shadow-sm">
-      <div className="flex items-center gap-6 text-[15px]">
-        <div className="flex items-center gap-2">
-          {farmersCount > 0 ? (
-            <>
-              <span className="text-green-600 text-[20px]">✓</span>
-              <span className="font-semibold text-green-700">
-                {farmersCount} Farmer{farmersCount !== 1 ? "s" : ""} Selected
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-gray-400 text-[20px]">○</span>
-              <span className="text-gray-500">No Farmers Selected</span>
-            </>
-          )}
-        </div>
+const modalBaseStyle = {
+  content: {
+    top: "50%", left: "50%", right: "auto", bottom: "auto",
+    transform: "translate(-50%, -50%)",
+    borderRadius: 20, padding: 20, maxHeight: "100vh", overflow: "visible",
+  },
+  overlay: { backgroundColor: "rgba(0, 0, 0, 0.8)", zIndex: 1000 },
+};
 
-        <div className="w-px h-8 bg-gray-300" />
+const STATUS_TABS = ["Confirmed", "To Ship", "Shipped", "Delivered", "Cancelled", "Refunded"];
+const STATUS_LABEL_TO_DB = {
+  Confirmed: "Confirmed",
+  "To Ship": "To Ship",
+  Shipped: "Shipped",
+  Delivered: "Delivered",
+  Cancelled: "Cancelled",
+  Refunded: "Refunded",
+};
+const mapStatusForDB = (label) => STATUS_LABEL_TO_DB[label] ?? null;
 
-        <div className="flex items-center gap-2">
-          {purchase ? (
-            <>
-              <span className="text-green-600 text-[20px]">✓</span>
-              <span className="font-semibold text-green-700">
-                {purchase.name} ({purchase.amountKg} kg)
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-gray-400 text-[20px]">○</span>
-              <span className="text-gray-500">No Feed Selected</span>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+export default function OrderStatus() {
+  const navigate = useNavigate();
 
-export default function FeedEntry() {
-  const [selectedPurchase, setSelectedPurchase] = useState(null);
-  const [selectedFarmers, setSelectedFarmers] = useState(new Set());
-  const [modalOpen, setModalOpen] = useState(false);
-  const [addFeedModalOpen, setAddFeedModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [addingFeed, setAddingFeed] = useState(false);
-  const [feedError, setFeedError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedTab, setSelectedTab] = useState("Confirmed");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const bumpReload = () => setReloadKey((k) => k + 1);
 
-  // Form state for Add Feed
-  const [feedFormData, setFeedFormData] = useState({
-    name: "",
-    brand: "",
-    form: "",
-  });
+  // counts
+  const [statusCounts, setStatusCounts] = useState({});
+  const [loadingCounts, setLoadingCounts] = useState(false);
+  const [countsErr, setCountsErr] = useState(null);
 
-  const handleAddFeedSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!feedFormData.name.trim()) {
-      setFeedError("Feed name is required");
-      return;
-    }
-
-    setAddingFeed(true);
-    setFeedError("");
-
+  const reloadCounts = async () => {
+    setLoadingCounts(true);
     try {
-      const row = await addFeedTypeForCoop({
-        name: feedFormData.name,
-        brand: feedFormData.brand,
-        form: feedFormData.form,
+      const counts = await getOrderStatusCounts({});
+      setStatusCounts(counts || {});
+    } catch (e) {
+      setCountsErr(e?.message || "Failed to load order counts.");
+    } finally {
+      setLoadingCounts(false);
+    }
+  };
+  useEffect(() => { reloadCounts(); }, []);
+
+  // selection per tab
+  const selectionMode = useMemo(() => {
+    if (selectedTab === "Confirmed") return "multi";
+    if (selectedTab === "To Ship") return "single";
+    if (selectedTab === "Shipped") return "multi"; // allow multi for Deliver
+    return "none";
+  }, [selectedTab]);
+
+  // Confirmed -> To Ship
+  const [marking, setMarking] = useState(false);
+  const onMarkToShip = async () => {
+    if (selectionMode !== "multi" || !selectedIds.length) return;
+    setMarking(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => adminMarkOrderToShip(id, { actorId: null }))
+      );
+      const failed = results.filter((r) => r.status === "rejected");
+      if (failed.length) {
+        console.error("[To Ship] failures:", failed);
+        alert(`Some orders failed to update (${failed.length}). Others succeeded.`);
+      } else {
+        alert("Selected orders marked as To Ship.");
+      }
+      await reloadCounts();
+      bumpReload();
+      setSelectedIds([]);
+      setSelectedTab("To Ship");
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  // Shipped -> Delivered (with detailed console + alert)
+  const [delivering, setDelivering] = useState(false);
+  const onMarkDelivered = async () => {
+    if (selectedTab !== "Shipped" || !selectedIds.length) return;
+    setDelivering(true);
+    try {
+      const results = await adminMarkManyDeliveredDetailed(selectedIds);
+      // results: [{ orderId, ok, error }]
+      console.groupCollapsed("[Deliver] RPC results");
+      console.table(results);
+      console.groupEnd();
+
+      const failures = results.filter(r => !r.ok);
+      const successes = results.filter(r => r.ok).map(r => r.orderId);
+
+      // print each failure to console with context
+      failures.forEach(f => {
+        console.error(`[Deliver] Order #${f.orderId} failed`, { orderId: f.orderId, error: f.error });
       });
 
-      alert(`Feed type "${row?.name || feedFormData.name}" added successfully!`);
-      setFeedFormData({ name: "", brand: "", form: "" });
-      setAddFeedModalOpen(false);
-      setRefreshKey((k) => k + 1);
-    } catch (err) {
-      console.error("Failed to add feed type:", err);
-      setFeedError(err.message || "Failed to add feed type. Please try again.");
+      if (failures.length) {
+        const lines = failures.map(f => `#${f.orderId}: ${f.error}`).join("\n");
+        alert(`Some orders failed to mark Delivered (${failures.length}).\n\n${lines}\n\nOthers succeeded: ${successes.join(", ") || "none"}.`);
+      } else {
+        alert(`Selected orders marked as Delivered.\nOrders: ${successes.join(", ")}`);
+      }
+
+      await reloadCounts();
+      bumpReload();
+      setSelectedIds([]);
+      setSelectedTab(failures.length ? "Shipped" : "Delivered");
     } finally {
-      setAddingFeed(false);
+      setDelivering(false);
     }
   };
 
-  const handleCloseAddFeedModal = () => {
-    if (addingFeed) return;
-    setFeedFormData({ name: "", brand: "", form: "" });
-    setFeedError("");
-    setAddFeedModalOpen(false);
-  };
+  // demo modals (unchanged)
+  const [updateModal, setIsUpdateModal] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedStatusType, setSelectedStatusType] = useState("On delivery");
+  const [confirmationModal, setConfirmationModal] = useState(false);
+  const handleSelect = (type) => { setSelectedStatusType(type); setIsDropdownOpen(false); };
+  function handleUpdateModal() { setIsUpdateModal(!updateModal); }
+  function handleUpdateStatus() { setIsUpdateModal(false); setConfirmationModal(true); }
+  const handleConfirmationModal = () => { setConfirmationModal(false); navigate("/admin/products/egg-pickup"); };
 
-  const canAllocate = selectedFarmers.size > 0 && selectedPurchase !== null;
+  const isMarkDisabled = !(selectionMode === "multi" && selectedIds.length > 0);
+  const isDeliverDisabled = !(selectedTab === "Shipped" && selectedIds.length > 0);
+
+  // allocation (To Ship flow)
+  const [supplySelection, setSupplySelection] = useState([]);
+  const [openAlloc, setOpenAlloc] = useState(false);
+  const selectedOrderId = selectedTab === "To Ship" && selectedIds.length === 1 ? selectedIds[0] : null;
+  const canOpenAlloc =
+    selectedTab === "To Ship" &&
+    selectedIds.length === 1 &&
+    supplySelection.length > 0;
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <div className="w-full space-y-5">
-        {/* Feed Types Table */}
-        <FeedEntryTable
-          refreshKey={refreshKey}
-          onAddClick={() => setAddFeedModalOpen(true)}
-        />
-
-        {/* Add Feed Modal */}
-        {addFeedModalOpen && (
-          <div
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget && !addingFeed) handleCloseAddFeedModal();
-            }}
-            className="fixed inset-0 z-[100] bg-black/50 grid place-items-center p-4"
-            aria-modal="true"
-            role="dialog"
-          >
-            <div className="w-[500px] max-w-[95vw] rounded-2xl bg-white shadow-xl">
-              <div className="p-6">
-                <div className="text-center mb-6">
-                  <h2 className="text-2xl font-bold text-[#F6C32B]">Add New Feed Type</h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Register a new feed type for your cooperative
-                  </p>
-                </div>
-
-                <form onSubmit={handleAddFeedSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Feed Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={feedFormData.name}
-                      onChange={(e) =>
-                        setFeedFormData((prev) => ({ ...prev, name: e.target.value }))
-                      }
-                      placeholder="e.g., Grower 6-14w, Layer High-Calcium"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F6C32B] focus:border-transparent"
-                      disabled={addingFeed}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Brand <span className="text-gray-400 text-xs">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={feedFormData.brand}
-                      onChange={(e) =>
-                        setFeedFormData((prev) => ({ ...prev, brand: e.target.value }))
-                      }
-                      placeholder="e.g., Pilmico, Unifeeds, B-MEG"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F6C32B] focus:border-transparent"
-                      disabled={addingFeed}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Form <span className="text-gray-400 text-xs">(Optional)</span>
-                    </label>
-                    <select
-                      value={feedFormData.form}
-                      onChange={(e) =>
-                        setFeedFormData((prev) => ({ ...prev, form: e.target.value }))
-                      }
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F6C32B] focus:border-transparent"
-                      disabled={addingFeed}
-                    >
-                      <option value="">Select form</option>
-                      <option value="pellet">Pellet</option>
-                      <option value="crumble">Crumble</option>
-                      <option value="mash">Mash</option>
-                    </select>
-                  </div>
-
-                  {feedError && (
-                    <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-                      <p className="text-sm text-red-600">{feedError}</p>
-                    </div>
-                  )}
-
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                    <p className="text-xs text-blue-700">
-                      <strong>Note:</strong> Duplicate feed types (same name, brand, and form) will not be added again.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={handleCloseAddFeedModal}
-                      disabled={addingFeed}
-                      className="flex-1 h-11 rounded-lg bg-gray-300 text-gray-700 font-semibold hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={addingFeed || !feedFormData.name.trim()}
-                      className={`flex-1 h-11 rounded-lg font-semibold transition-all ${
-                        addingFeed || !feedFormData.name.trim()
-                          ? "bg-yellow-300 text-white cursor-not-allowed"
-                          : "bg-[#F6C32B] text-white hover:opacity-90 hover:shadow-lg"
-                      }`}
-                    >
-                      {addingFeed ? "Adding..." : "Add Feed Type"}
-                    </button>
-                  </div>
-                </form>
+    <div className="flex flex-col gap-5">
+      {/* Tabs */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {STATUS_TABS.map((label) => {
+            const count = statusCounts[label] || 0;
+            const active = selectedTab === label;
+            return (
+              <div
+                key={label}
+                onClick={() => { setSelectedTab(label); setSelectedIds([]); }}
+                className={`relative cursor-pointer rounded-xl pl-4 pr-8 py-2 text-sm sm:text-base transition-colors ${
+                  active
+                    ? "border border-primaryYellow text-primaryYellow bg-yellow-50"
+                    : "border border-gray-300 text-gray-500 hover:border-primaryYellow hover:text-primaryYellow"
+                }`}
+              >
+                {label}
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                  {loadingCounts ? "…" : count}
+                </span>
               </div>
+            );
+          })}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 sm:gap-5 items-center">
+          {selectedTab === "Confirmed" && (
+            <button
+              onClick={onMarkToShip}
+              disabled={isMarkDisabled || marking}
+              className={`font-medium rounded-lg px-3 py-1.5 sm:px-5 sm:py-2 text-sm sm:text-base ${
+                isMarkDisabled || marking
+                  ? "bg-yellow-200 text-white cursor-not-allowed"
+                  : "bg-primaryYellow text-white hover:opacity-90"
+              }`}
+              title={isMarkDisabled ? "Select one or more Confirmed orders" : "Mark selected orders as To Ship"}
+            >
+              {marking ? "Marking…" : "Mark as to ship"}
+            </button>
+          )}
+
+          {selectedTab === "Shipped" && (
+            <button
+              onClick={onMarkDelivered}
+              disabled={isDeliverDisabled || delivering}
+              className={`font-medium rounded-lg px-3 py-1.5 sm:px-5 sm:py-2 text-sm sm:text-base ${
+                isDeliverDisabled || delivering
+                  ? "bg-yellow-200 text-white cursor-not-allowed"
+                  : "bg-primaryYellow text-white hover:opacity-90"
+              }`}
+              title={isDeliverDisabled ? "Select one or more Shipped orders" : "Mark selected orders as Delivered"}
+            >
+              {delivering ? "Delivering…" : "Deliver"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {countsErr && <div className="text-sm text-red-600">{countsErr}</div>}
+
+      {/* Orders table */}
+      <div className="p-4 sm:p-6 rounded-lg border border-gray-200 shadow-lg overflow-x-auto">
+        <OrderTable
+          key={reloadKey}
+          status={mapStatusForDB(selectedTab)}
+          selectedOption={mapStatusForDB(selectedTab)}
+          mode={selectionMode}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+      </div>
+
+      {/* Selected order card (To Ship only) */}
+      {selectedOrderId && <SelectedOrderCard orderId={selectedOrderId} />}
+
+      {/* Egg Supply table */}
+      <EggSupplyTable
+        onSelectedRowsChange={setSupplySelection}
+        autoFilterOrderId={selectedOrderId}
+      />
+
+      {/* Allocate button */}
+      <div className="flex justify-end">
+        <button
+          className={`rounded-lg px-5 py-2 text-white font-semibold transition-all ${
+            canOpenAlloc ? "bg-primaryYellow hover:opacity-90 hover:shadow-lg" : "bg-gray-300 cursor-not-allowed"
+          }`}
+          disabled={!canOpenAlloc}
+          onClick={() => setOpenAlloc(true)}
+        >
+          {selectedTab !== "To Ship"
+            ? "Select a 'To Ship' order first"
+            : selectedIds.length !== 1
+            ? "Select exactly one order"
+            : supplySelection.length === 0
+            ? "Select egg supply to allocate"
+            : `Allocate ${supplySelection.length} source${supplySelection.length > 1 ? "s" : ""}`}
+        </button>
+      </div>
+
+      {/* Allocation modal */}
+      {openAlloc && (
+        <EggAllocation
+          open={openAlloc}
+          order={{ orderID: selectedIds[0] }}
+          selectedSupplyRowIds={supplySelection}
+          onClose={() => setOpenAlloc(false)}
+          onAllocated={() => {
+            setOpenAlloc(false);
+            setSupplySelection([]);
+            reloadCounts();
+            bumpReload();
+          }}
+        />
+      )}
+
+      {/* Allocation history */}
+      <EggAllocationHistory orderId={selectedIds[0] || null} reloadKey={reloadKey} />
+
+      {/* Demo modals */}
+      <Modal
+        isOpen={updateModal}
+        onRequestClose={handleUpdateModal}
+        contentLabel="Update Order Status"
+        style={{ ...modalBaseStyle, content: { ...modalBaseStyle.content, width: "90%", maxWidth: "500px" } }}
+      >
+        <div className="flex flex-col gap-5 px-3 py-6">
+          <h1 className="text-primaryYellow text-fluid-xl text-center font-bold">Update Order Status</h1>
+          <div className="flex flex-col">
+            <h1 className="text-gray-400 text-sm sm:text-base">Current status:</h1>
+            <p className="text-primaryYellow text-base sm:text-lg font-semibold">Pending</p>
+          </div>
+          <div className="flex flex-col">
+            <h1 className="text-gray-400 text-sm sm:text-base">Update status:</h1>
+            <div className="relative">
+              <div
+                className="flex items-center justify-between gap-2 shadow-xl border border-gray-300 text-primaryYellow font-medium rounded-lg px-4 py-2 cursor-pointer hover:opacity-90"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <p className="text-sm sm:text-base">{selectedStatusType}</p>
+                <IoChevronDown className={`transform transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`} />
+              </div>
+              {isDropdownOpen && (
+                <div className="absolute mt-2 w-40 sm:w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                  {["On delivery", "Delivered", "Packing"].map((type, i) => (
+                    <div
+                      key={i}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-gray-700 text-sm sm:text-base"
+                      onClick={() => setSelectedStatusType(type)}
+                    >
+                      {type}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        )}
-      </div>
-    </LocalizationProvider>
+          <div className="flex gap-2 justify-center">
+            <button onClick={handleUpdateModal} className="bg-gray-400 rounded-lg px-4 sm:px-6 py-2 text-white text-sm sm:text-base font-semibold">
+              Cancel
+            </button>
+            <button onClick={handleUpdateStatus} className="bg-primaryYellow rounded-lg px-4 sm:px-6 py-2 text-white font-semibold text-sm sm:text-base hover:bg-yellow-500 transition">
+              Confirm
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={confirmationModal}
+        onRequestClose={handleConfirmationModal}
+        contentLabel="Confirm Status"
+        style={{ ...modalBaseStyle, content: { ...modalBaseStyle.content, width: "90%", maxWidth: "400px" } }}
+      >
+        <div className="flex flex-col justify-center items-center p-6 text-center">
+          <h1 className="text-primaryYellow font-bold text-fluid-2xl">Pickup Complete!</h1>
+          <p className="text-gray-400 mb-6 sm:mb-10 text-base sm:text-xl">Farmer Name here</p>
+          <div onClick={handleConfirmationModal} className="w-full bg-primaryYellow shadow-md rounded-lg text-white px-4 py-3 font-bold cursor-pointer hover:bg-yellow-500 transition">
+            Update Egg Count
+          </div>
+        </div>
+      </Modal>
+    </div>
   );
 }

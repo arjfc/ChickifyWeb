@@ -1,3 +1,4 @@
+// pages/admin/products/ProductDetails.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../../../components/Card";
 import { IoFilterOutline } from "react-icons/io5";
@@ -91,6 +92,8 @@ export default function ProductDetails() {
     prod_price_per_tray: "",
     prod_status: "active",
     prod_img: "",
+    min_bundle_trays: 5,
+    max_bundle_trays: 100,
   });
 
   const [previewUrl, setPreviewUrl] = useState("");
@@ -100,7 +103,6 @@ export default function ProductDetails() {
   const [toast, setToast] = useState(null);
   const notify = (message, type = "warning", title = "Action needed") => {
     setToast({ message, type, title });
-    // auto close after 4.5s
     window.clearTimeout(notify._t);
     notify._t = window.setTimeout(() => setToast(null), 4500);
   };
@@ -111,17 +113,37 @@ export default function ProductDetails() {
     if (!f.prod_name?.trim()) errors.push("• Product name is required.");
     if (!f.p_categ_id) errors.push("• Category is required.");
     if (!f.size_id) errors.push("• Size is required.");
+
     const price = Number(f.prod_price_per_tray);
     if (!Number.isFinite(price) || price <= 0)
       errors.push("• Price / Tray must be a positive number.");
+
     if (!["active", "inactive"].includes(String(f.prod_status)))
       errors.push("• Status must be active or inactive.");
+
+    const minTrays = Number(f.min_bundle_trays);
+    const maxTrays = Number(f.max_bundle_trays);
+
+    if (!Number.isFinite(minTrays) || minTrays <= 0) {
+      errors.push("• Minimum trays per order must be a positive number.");
+    }
+    if (!Number.isFinite(maxTrays) || maxTrays <= 0) {
+      errors.push("• Maximum trays per order must be a positive number.");
+    }
+    if (
+      Number.isFinite(minTrays) &&
+      Number.isFinite(maxTrays) &&
+      minTrays > maxTrays
+    ) {
+      errors.push("• Minimum trays cannot be greater than maximum trays.");
+    }
+
     return errors;
   }
 
   async function refreshProfile() {
     try {
-      const p = await getMyUserProfile(); // uses RPC (joined to address)
+      const p = await getMyUserProfile();
       setProfile(p);
       return p;
     } catch (e) {
@@ -146,7 +168,6 @@ export default function ProductDetails() {
     refreshProfile();
   }, []);
 
-  // Re-check profile when returning from Settings tab/page
   useEffect(() => {
     const onVis = async () => {
       if (document.visibilityState === "visible") {
@@ -187,7 +208,6 @@ export default function ProductDetails() {
 
   /* ---------- UI handlers ---------- */
   const onClickAdd = async () => {
-    // keep button interactive – just notify if address is incomplete
     const p = await refreshProfile();
     if (!hasProfileAddress(p)) {
       notify(
@@ -206,6 +226,8 @@ export default function ProductDetails() {
       prod_price_per_tray: "",
       prod_status: "active",
       prod_img: "",
+      min_bundle_trays: 5,
+      max_bundle_trays: 100,
     });
     setPreviewUrl("");
     setIsModalOpen(true);
@@ -222,13 +244,14 @@ export default function ProductDetails() {
       prod_price_per_tray: product.prod_price_per_tray,
       prod_status: product.prod_status,
       prod_img: product.prod_img || "",
+      min_bundle_trays: product.min_bundle_trays ?? 5,
+      max_bundle_trays: product.max_bundle_trays ?? 100,
     });
     setPreviewUrl(product.prod_img || "");
     setIsModalOpen(true);
   };
 
   async function onSave() {
-    // defense-in-depth: block save if address incomplete
     const p = profile ?? (await refreshProfile());
     if (!hasProfileAddress(p)) {
       notify(
@@ -249,6 +272,8 @@ export default function ProductDetails() {
         p_categ_id: Number(form.p_categ_id),
         size_id: Number(form.size_id),
         prod_price_per_tray: Number(form.prod_price_per_tray),
+        min_bundle_trays: Number(form.min_bundle_trays),
+        max_bundle_trays: Number(form.max_bundle_trays),
       });
       setIsModalOpen(false);
       await reloadList();
@@ -266,7 +291,6 @@ export default function ProductDetails() {
 
   return (
     <>
-      {/* Toast */}
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -294,7 +318,9 @@ export default function ProductDetails() {
                   </p>
                   <div className="text-sm text-gray-600">
                     Price / Tray:{" "}
-                    {current ? Number(current.prod_price_per_tray).toFixed(2) : "—"}
+                    {current
+                      ? Number(current.prod_price_per_tray).toFixed(2)
+                      : "—"}
                     <br />
                     Status: {current?.prod_status || "—"}
                   </div>
@@ -306,7 +332,9 @@ export default function ProductDetails() {
           {/* RIGHT CARD */}
           <Card>
             <div className="flex flex-col gap-5">
-              <h1 className="text-gray-400 text-lg font-bold">Recently Available Size</h1>
+              <h1 className="text-gray-400 text-lg font-bold">
+                Recently Available Size
+              </h1>
               <div className="flex flex-wrap gap-2 sm:gap-4">
                 {sizesHeader.map((label, i) => (
                   <div
@@ -321,7 +349,6 @@ export default function ProductDetails() {
                 )}
               </div>
 
-              {/* FILTER */}
               <div className="flex items-center gap-3">
                 <select
                   value={selectedCategoryId ?? ""}
@@ -360,7 +387,11 @@ export default function ProductDetails() {
               Add Product
             </button>
           </div>
-          <ProductTable products={products} loading={loading} onEdit={onClickEdit} />
+          <ProductTable
+            products={products}
+            loading={loading}
+            onEdit={onClickEdit}
+          />
         </div>
 
         {/* MODAL */}
@@ -376,13 +407,13 @@ export default function ProductDetails() {
 
             {/* Row 1: Image + Category + Size */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {/* Upload Product Image (with preview) */}
+              {/* Upload Product Image */}
               <div className="w-full">
                 <label
                   className="relative block w-full border rounded-lg shadow-md bg-gray-50"
                   style={{ height: 180 }}
                 >
-                  {(previewUrl || form.prod_img) ? (
+                  {previewUrl || form.prod_img ? (
                     <img
                       src={previewUrl || form.prod_img}
                       alt="preview"
@@ -402,18 +433,20 @@ export default function ProductDetails() {
                       const f = e.target.files?.[0];
                       if (!f) return;
 
-                      // 1) instant preview
                       const local = URL.createObjectURL(f);
                       setPreviewUrl(local);
 
                       try {
-                        // 2) upload and store PUBLIC URL
                         setIsUploading(true);
                         const publicUrl = await uploadProductImage(f);
                         setForm((v) => ({ ...v, prod_img: publicUrl }));
                       } catch (err) {
                         console.error("upload error:", err);
-                        notify(err.message || "Upload failed", "error", "Error");
+                        notify(
+                          err.message || "Upload failed",
+                          "error",
+                          "Error"
+                        );
                         setPreviewUrl("");
                       } finally {
                         setIsUploading(false);
@@ -424,18 +457,25 @@ export default function ProductDetails() {
                 </label>
 
                 <div className="mt-1 text-xs text-gray-500">
-                  {isUploading ? "Uploading image…" : "Click the box to choose an image"}
+                  {isUploading
+                    ? "Uploading image…"
+                    : "Click the box to choose an image"}
                 </div>
               </div>
 
               <div className="flex flex-col gap-5">
                 {/* Category */}
                 <div className="flex flex-col">
-                  <label className="mb-2 font-bold text-gray-400">Category</label>
+                  <label className="mb-2 font-bold text-gray-400">
+                    Category
+                  </label>
                   <select
                     value={form.p_categ_id || ""}
                     onChange={(e) =>
-                      setForm((v) => ({ ...v, p_categ_id: Number(e.target.value) }))
+                      setForm((v) => ({
+                        ...v,
+                        p_categ_id: Number(e.target.value),
+                      }))
                     }
                     className="border rounded-lg p-3 text-gray-600 shadow-md"
                   >
@@ -456,7 +496,10 @@ export default function ProductDetails() {
                   <select
                     value={form.size_id || ""}
                     onChange={(e) =>
-                      setForm((v) => ({ ...v, size_id: Number(e.target.value) }))
+                      setForm((v) => ({
+                        ...v,
+                        size_id: Number(e.target.value),
+                      }))
                     }
                     className="border rounded-lg p-3 text-gray-600 shadow-md"
                   >
@@ -475,24 +518,33 @@ export default function ProductDetails() {
 
             {/* Name */}
             <div className="flex flex-col">
-              <label className="mb-2 font-bold text-gray-400">Product Name</label>
+              <label className="mb-2 font-bold text-gray-400">
+                Product Name
+              </label>
               <input
                 type="text"
                 placeholder="Enter product name"
                 value={form.prod_name}
-                onChange={(e) => setForm((v) => ({ ...v, prod_name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((v) => ({ ...v, prod_name: e.target.value }))
+                }
                 className="border rounded-lg p-3 text-gray-600 shadow-md"
               />
             </div>
 
             {/* Description */}
             <div className="flex flex-col">
-              <label className="mb-2 font-bold text-gray-400">Product Description</label>
+              <label className="mb-2 font-bold text-gray-400">
+                Product Description
+              </label>
               <textarea
                 placeholder="Enter product description"
                 value={form.prod_description}
                 onChange={(e) =>
-                  setForm((v) => ({ ...v, prod_description: e.target.value }))
+                  setForm((v) => ({
+                    ...v,
+                    prod_description: e.target.value,
+                  }))
                 }
                 className="border rounded-lg p-3 resize-none shadow-md text-gray-600"
                 rows={3}
@@ -502,13 +554,18 @@ export default function ProductDetails() {
             {/* Price + Status */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col">
-                <label className="mb-2 font-bold text-gray-400">Price / Tray</label>
+                <label className="mb-2 font-bold text-gray-400">
+                  Price / Tray
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   value={form.prod_price_per_tray}
                   onChange={(e) =>
-                    setForm((v) => ({ ...v, prod_price_per_tray: e.target.value }))
+                    setForm((v) => ({
+                      ...v,
+                      prod_price_per_tray: e.target.value,
+                    }))
                   }
                   className="border rounded-lg p-3 text-gray-600 shadow-md"
                   placeholder="e.g., 210.00"
@@ -530,6 +587,53 @@ export default function ProductDetails() {
               </div>
             </div>
 
+            {/* Min / Max bundles (trays) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="flex flex-col">
+                <label className="mb-2 font-bold text-gray-400">
+                  Minimum Order (trays)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.min_bundle_trays}
+                  onChange={(e) =>
+                    setForm((v) => ({
+                      ...v,
+                      min_bundle_trays: e.target.value,
+                    }))
+                  }
+                  className="border rounded-lg p-3 text-gray-600 shadow-md"
+                  placeholder="e.g., 5"
+                />
+                <span className="mt-1 text-xs text-gray-400">
+                  Example: 5 trays ≈ 150 eggs if 1 tray = 30 eggs
+                </span>
+              </div>
+
+              <div className="flex flex-col">
+                <label className="mb-2 font-bold text-gray-400">
+                  Maximum Order (trays)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.max_bundle_trays}
+                  onChange={(e) =>
+                    setForm((v) => ({
+                      ...v,
+                      max_bundle_trays: e.target.value,
+                    }))
+                  }
+                  className="border rounded-lg p-3 text-gray-600 shadow-md"
+                  placeholder="e.g., 100"
+                />
+                <span className="mt-1 text-xs text-gray-400">
+                  Must be greater than or equal to minimum trays.
+                </span>
+              </div>
+            </div>
+
             {/* Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-5">
               <button
@@ -542,7 +646,11 @@ export default function ProductDetails() {
                 onClick={onSave}
                 className="flex-1 bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
                 disabled={isUploading}
-                title={isUploading ? "Please wait for the image upload to finish" : ""}
+                title={
+                  isUploading
+                    ? "Please wait for the image upload to finish"
+                    : ""
+                }
               >
                 Save Changes
               </button>
