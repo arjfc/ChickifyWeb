@@ -1,4 +1,3 @@
-// services/Fees.js
 import { supabase } from "@/lib/supabase";
 
 export async function fetchAdminFees() {
@@ -13,4 +12,36 @@ export async function fetchAdminFees() {
   const totalFees = rows.length > 0 ? Number(rows[0].total_fees ?? 0) : 0;
 
   return { rows, totalFees };
+}
+
+export async function adminSubmitRemittance({ amount, img }) {
+  const { data, error } = await supabase.rpc("admin_submit_remittance", {
+    p_amount: amount,
+    p_img: img ?? null,
+  });
+
+  if (error) throw error;
+
+  // data = [{ admin_ledger_id, superadmin_ledger_id }]
+  return data?.[0] ?? null;
+}
+
+
+export async function uploadRemittanceProof(file) {
+  if (!file) return null;
+
+  const ext = file.name.split(".").pop();
+  const fileName = `remit_${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from("remittance-proofs")
+    .upload(fileName, file);
+
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from("remittance-proofs")
+    .getPublicUrl(fileName);
+
+  return data.publicUrl;
 }

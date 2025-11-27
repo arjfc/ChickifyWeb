@@ -6,7 +6,11 @@ import { FaCircleInfo } from "react-icons/fa6";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import Modal from "react-modal";
 import eggImage from "../../../assets/egg.png";
-import {viewRefundOverviewAdmin,approveRefundAdmin,rejectRefundAdmin,} from "@/services/Refund";
+import {
+  viewRefundOverviewAdmin,
+  approveRefundAdmin,
+  rejectRefundAdmin,
+} from "@/services/Refund";
 import { supabase } from "@/lib/supabase";
 
 const modalStyle = {
@@ -46,7 +50,8 @@ async function uploadImageFromUrl(id, img, bucketName = "refund-proofs", folder 
   const path = `${folder}/${id}/${fileName}`;
 
   const res = await fetch(img.uri);
-  if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
+  if (!res.ok)
+    throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
   const bytes = await res.arrayBuffer();
 
   const headerType = res.headers.get("content-type") || undefined;
@@ -58,7 +63,9 @@ async function uploadImageFromUrl(id, img, bucketName = "refund-proofs", folder 
 
   if (uploadError) throw uploadError;
 
-  const { data, error: urlError } = supabase.storage.from(bucketName).getPublicUrl(path);
+  const { data, error: urlError } = supabase.storage
+    .from(bucketName)
+    .getPublicUrl(path);
   if (urlError || !data?.publicUrl) throw urlError ?? new Error("No public URL returned");
 
   return data.publicUrl;
@@ -78,7 +85,10 @@ const parseAsLocalDate = (s) => {
 
 const fmtPHDate = (v) => {
   if (!v) return "—";
-  const dt = typeof v === "string" ? (parseAsLocalDate(v) || new Date(v)) : new Date(v);
+  const dt =
+    typeof v === "string"
+      ? parseAsLocalDate(v) || new Date(v)
+      : new Date(v);
   if (!dt || isNaN(dt)) return "—";
   return dt.toLocaleDateString("en-PH", {
     year: "numeric",
@@ -104,13 +114,25 @@ function computeRange(key) {
   const startToday = dayjs().startOf("day");
   switch (key) {
     case "today":
-      return { start: startToday.toISOString(), end: startToday.add(1, "day").toISOString() };
+      return {
+        start: startToday.toISOString(),
+        end: startToday.add(1, "day").toISOString(),
+      };
     case "yesterday":
-      return { start: startToday.subtract(1, "day").toISOString(), end: startToday.toISOString() };
+      return {
+        start: startToday.subtract(1, "day").toISOString(),
+        end: startToday.toISOString(),
+      };
     case "7":
-      return { start: startToday.subtract(7, "day").toISOString(), end: null };
+      return {
+        start: startToday.subtract(7, "day").toISOString(),
+        end: null,
+      };
     case "30":
-      return { start: startToday.subtract(30, "day").toISOString(), end: null };
+      return {
+        start: startToday.subtract(30, "day").toISOString(),
+        end: null,
+      };
     case "this_month":
       return {
         start: dayjs().startOf("month").toISOString(),
@@ -118,12 +140,20 @@ function computeRange(key) {
       };
     case "last_month":
       return {
-        start: dayjs().subtract(1, "month").startOf("month").toISOString(),
-        end: dayjs().subtract(1, "month").endOf("month").add(1, "millisecond").toISOString(),
+        start: dayjs()
+          .subtract(1, "month")
+          .startOf("month")
+          .toISOString(),
+        end: dayjs()
+          .subtract(1, "month")
+          .endOf("month")
+          .add(1, "millisecond")
+          .toISOString(),
       };
     case "all":
     default:
-      if (typeof key === "string" && key.includes("T")) return { start: key, end: null };
+      if (typeof key === "string" && key.includes("T"))
+        return { start: key, end: null };
       return { start: null, end: null };
   }
 }
@@ -283,7 +313,8 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
   const baseFiltered = useMemo(() => {
     if (!selectedOption || selectedOption === "All") return rows;
     return rows.filter(
-      (r) => (r.status || "").toLowerCase() === selectedOption.toLowerCase()
+      (r) =>
+        (r.status || "").toLowerCase() === selectedOption.toLowerCase()
     );
   }, [rows, selectedOption]);
 
@@ -350,7 +381,11 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     const amountNum = parseFloat(refundAmount || "0");
     if (!(amountNum > 0)) return;
 
-    const items = selectedItems.length ? selectedItems : (modalData ? [modalData] : []);
+    const items = selectedItems.length
+      ? selectedItems
+      : modalData
+      ? [modalData]
+      : [];
 
     setIsConfirming(true);
     try {
@@ -391,7 +426,10 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
   ]);
 
   const canConfirmRefund =
-    !!refundImageFile && !!refundAmount && parseFloat(refundAmount) > 0 && !isConfirming;
+    !!refundImageFile &&
+    !!refundAmount &&
+    parseFloat(refundAmount) > 0 &&
+    !isConfirming;
 
   // ===== Listen for Approve/Reject triggers BUT ONLY OPEN IF A CHECKBOX IS SELECTED =====
   useEffect(() => {
@@ -416,21 +454,19 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
   const confirmReject = useCallback(async () => {
     const reason = (rejectReason || "").trim();
     if (!reason) return;
-    if (selectedItems.length === 0) return; // safety (modal shouldn't open otherwise)
+    if (selectedItems.length === 0) return; // safety
 
     setIsRejecting(true);
     try {
-      // call RPC for each selected refund
       await Promise.all(
         selectedItems.map((item) =>
           rejectRefundAdmin({ refundId: item.refundId, reason })
         )
       );
 
-      // close + reset
       setIsRejectOpen(false);
       setRejectReason("");
-      await reload(); // refresh table to move items to "Rejected" tab
+      await reload();
     } catch (err) {
       console.error(err);
       alert(err?.message || "Failed to reject refund.");
@@ -439,7 +475,31 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     }
   }, [rejectReason, selectedItems, reload]);
 
-  const canConfirmReject = !!(rejectReason && rejectReason.trim().length > 0) && !isRejecting;
+  const canConfirmReject =
+    !!(rejectReason && rejectReason.trim().length > 0) && !isRejecting;
+
+  // ✅ NEW: Auto-fill refund amount (eggs only: no delivery, no service)
+  useEffect(() => {
+    if (!isRefundOpen) return;
+
+    // Prefer selected item; fallback to modalData if needed
+    const target =
+      (selectedItems && selectedItems[0]) ||
+      modalData ||
+      null;
+    if (!target) return;
+
+    const total = Number(target.totalAmountPaid ?? 0);
+    const delivery = Number(target.deliveryFee ?? 0);
+    const service = Number(target.serviceFee ?? 0);
+
+    const eggOnlySubtotal = total - delivery - service;
+    if (!Number.isNaN(eggOnlySubtotal) && eggOnlySubtotal > 0) {
+      setRefundAmount((prev) =>
+        prev === "" ? eggOnlySubtotal.toFixed(2) : prev
+      );
+    }
+  }, [isRefundOpen, selectedItems, modalData]);
 
   return (
     <>
@@ -449,13 +509,17 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
             key={item.refundId}
             className="bg-yellow-100 text-gray-700 rounded-lg shadow-sm transition"
           >
-            <td className="px-4 py-3 text-center font-medium">{item.refundId}</td>
-            <td className="px-4 py-3 text-center">{item.customerName}</td>
+            <td className="px-4 py-3 text-center font-medium">
+              {item.refundId}
+            </td>
+            <td className="px-4 py-3 text-center">
+              {item.customerName}
+            </td>
             <td className="px-4 py-3 text-center">{item.orderId}</td>
 
             {/* Rejected tab shows reason_rejected; else original reason */}
             <td className="px-4 py-3 text-center">
-              {isRejectedTab ? (item.reasonRejected ?? "—") : item.reason}
+              {isRejectedTab ? item.reasonRejected ?? "—" : item.reason}
             </td>
 
             {/* Date column switches per tab */}
@@ -529,7 +593,9 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                   </p>
                 </div>
                 <div className="flex flex-col items-end">
-                  <h1 className="text-lg text-gray-400 font-bold">Current Status:</h1>
+                  <h1 className="text-lg text-gray-400 font-bold">
+                    Current Status:
+                  </h1>
                   <p
                     className={`text-2xl font-bold ${
                       modalData.status === "In Review"
@@ -547,7 +613,9 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
               {/* Info section */}
               <div className="border-2 p-5 rounded-lg w-full flex gap-8 items-start">
                 <div className="flex flex-col items-center w-1/2 -ml-8">
-                  <p className="font-bold text-primaryYellow mb-2">Image Proof</p>
+                  <p className="font-bold text-primaryYellow mb-2">
+                    Image Proof
+                  </p>
                   {modalData.imageProof ? (
                     <img
                       src={modalData.imageProof}
@@ -563,12 +631,20 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                 <div className="flex flex-col gap-3 w-1/2 -ml-4">
                   <div className="grid grid-cols-2 gap-8">
                     <div>
-                      <p className="font-bold text-primaryYellow">Customer Name</p>
-                      <p className="text-gray-500 font-bold">{modalData.customerName}</p>
+                      <p className="font-bold text-primaryYellow">
+                        Customer Name
+                      </p>
+                      <p className="text-gray-500 font-bold">
+                        {modalData.customerName}
+                      </p>
                     </div>
                     <div>
-                      <p className="font-bold text-primaryYellow">Order ID</p>
-                      <p className="text-gray-500 font-bold">{modalData.orderId}</p>
+                      <p className="font-bold text-primaryYellow">
+                        Order ID
+                      </p>
+                      <p className="text-gray-500 font-bold">
+                        {modalData.orderId}
+                      </p>
                     </div>
                   </div>
 
@@ -577,33 +653,45 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                       {isRejectedTab ? "Reason (Rejected)" : "Reason"}
                     </p>
                     <p className="text-gray-500 font-bold">
-                      {isRejectedTab ? (modalData.reasonRejected ?? "—") : modalData.reason}
+                      {isRejectedTab
+                        ? modalData.reasonRejected ?? "—"
+                        : modalData.reason}
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-8">
                     <div>
-                      <p className="font-bold text-primaryYellow">Quantity Ordered</p>
+                      <p className="font-bold text-primaryYellow">
+                        Quantity Ordered
+                      </p>
                       <p className="text-gray-500 font-bold">
                         {modalData.quantityOrdered} trays
                       </p>
                     </div>
                     <div>
-                      <p className="font-bold text-primaryYellow">Mode of Payment</p>
-                      <p className="text-gray-500 font-bold">{modalData.modeOfPayment}</p>
+                      <p className="font-bold text-primaryYellow">
+                        Mode of Payment
+                      </p>
+                      <p className="text-gray-500 font-bold">
+                        {modalData.modeOfPayment}
+                      </p>
                     </div>
                   </div>
 
                   {/* Always show GCash fields */}
                   <div className="grid grid-cols-2 gap-8">
                     <div>
-                      <p className="font-bold text-primaryYellow">GCash Name</p>
+                      <p className="font-bold text-primaryYellow">
+                        GCash Name
+                      </p>
                       <p className="text-gray-500 font-bold">
                         {modalData.gcashName ?? "N/A"}
                       </p>
                     </div>
                     <div>
-                      <p className="font-bold text-primaryYellow">GCash Number</p>
+                      <p className="font-bold text-primaryYellow">
+                        GCash Number
+                      </p>
                       <p className="text-gray-500 font-bold">
                         {modalData.gcashNumber ?? "N/A"}
                       </p>
@@ -612,7 +700,10 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
 
                   {/* Order Summary */}
                   <div className="border-t pt-4 mt-2">
-                    <h2 className="font-bold text-primaryYellow mb-2">Order Summary</h2>
+                    <h2 className="font-bold text-primaryYellow mb-2">
+                      Order Summary
+                    </h2>
+                    {/* Subtotal: eggs only (no delivery, no service) */}
                     <div className="flex justify-between text-gray-500 font-bold">
                       <span>Subtotal</span>
                       <span>
@@ -624,17 +715,29 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                         ).toFixed(2)}
                       </span>
                     </div>
-                    <div className="flex justify-between text-gray-500 font-bold">
-                      <span>Delivery Fee</span>
-                      <span>₱{Number(modalData.deliveryFee ?? 0).toFixed(2)}</span>
-                    </div>
+
+                    {/* Delivery Fee removed from display */}
+
                     <div className="flex justify-between text-gray-500 font-bold">
                       <span>Service Fee</span>
-                      <span>₱{Number(modalData.serviceFee ?? 0).toFixed(2)}</span>
+                      <span>
+                        ₱
+                        {Number(
+                          modalData.serviceFee ?? 0
+                        ).toFixed(2)}
+                      </span>
                     </div>
+
+                    {/* Total Order: EXCLUDES delivery fee */}
                     <div className="flex justify-between text-gray-700 font-extrabold mt-2">
                       <span>Total Order</span>
-                      <span>₱{Number(modalData.totalAmountPaid ?? 0).toFixed(2)}</span>
+                      <span>
+                        ₱
+                        {(
+                          (modalData.totalAmountPaid ?? 0) -
+                          (modalData.deliveryFee ?? 0)
+                        ).toFixed(2)}
+                      </span>
                     </div>
 
                     {/* ℹ️ Note */}
@@ -652,7 +755,9 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                         <span>Refunded Amount</span>
                         <span>
                           {modalData.refundedAmount != null
-                            ? `₱${Number(modalData.refundedAmount).toFixed(2)}`
+                            ? `₱${Number(
+                                modalData.refundedAmount
+                              ).toFixed(2)}`
                             : "—"}
                         </span>
                       </div>
@@ -675,7 +780,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
 
         {/* REFUND MODAL */}
         <Modal
-         isOpen={isRefundOpen}
+          isOpen={isRefundOpen}
           onRequestClose={() => {
             setIsRefundOpen(false);
             clearRefundImage();
@@ -687,8 +792,12 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
           <div className="px-6 py-5" style={{ backgroundColor: "#fec718" }}>
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-900">Process Refund</h1>
-                <p className="text-sm text-gray-800/80 mt-1">Attach a single image as proof.</p>
+                <h1 className="text-2xl font-extrabold text-gray-900">
+                  Process Refund
+                </h1>
+                <p className="text-sm text-gray-800/80 mt-1">
+                  Attach a single image as proof.
+                </p>
               </div>
               <button
                 onClick={() => {
@@ -834,7 +943,9 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
           <div className="px-6 py-5" style={{ backgroundColor: "#fec718" }}>
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-extrabold text-gray-900">Reject Refund</h1>
+                <h1 className="text-2xl font-extrabold text-gray-900">
+                  Reject Refund
+                </h1>
                 <p className="text-sm text-gray-800/80 mt-1">
                   Provide a reason why this refund is canceled.
                 </p>

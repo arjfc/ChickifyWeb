@@ -1,12 +1,6 @@
 // components/admin/tables/ReportTable.jsx
 "use client";
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
+import React, {useEffect,useMemo,useState,forwardRef,useImperativeHandle,} from "react";
 import Table from "../../Table";
 import {fetchEggProduction,fetchEggBatch,fetchAdminSalesRecords,fetchPayoutOverviewList,fetchMyFarmersList,} from "@/services/Reports";
 import { fetchTransactionsByAdmin } from "@/services/TransactionLogs";
@@ -88,6 +82,29 @@ const ReportTable = forwardRef(function ReportTable(
       return false;
     }
   }
+
+  /* ======================== Background image (from public) ======================== */
+  const BG_URL = "/background.png";
+
+  const loadBgImageAsDataUrl = async () => {
+    try {
+      const res = await fetch(BG_URL);
+      if (!res.ok) throw new Error(`BG fetch failed (${res.status})`);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn(
+        "[ReportTable] Failed to load PDF background:",
+        e?.message || e
+      );
+      return null;
+    }
+  };
 
   /* ======================== date helpers ======================== */
   const parseDate = (d) => {
@@ -764,50 +781,102 @@ const ReportTable = forwardRef(function ReportTable(
       )
     );
   }, [sourceData, selectedOption]);
+ /* ======================== export PDF (fonts now match 1st code) ======================== */
+ useImperativeHandle(ref, () => ({
+  async exportPdf(meta = {}) {
+    const {
+      title = "Chickify Admin Reports",
+      subtitle = selectedOption,
+      dateFrom: fromProp = dateFrom,
+      dateTo: toProp = dateTo,
+      filename,
+    } = meta;
 
-  /* ======================== export PDF ======================== */
-  useImperativeHandle(ref, () => ({
-    async exportPdf(meta = {}) {
-      const {
-        title = "Chickify Reports",
-        subtitle = selectedOption,
-        dateFrom: from = "",
-        dateTo: to = "",
-        filename,
-      } = meta;
+    const rawFrom = fromProp;
+    const rawTo = toProp;
 
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "pt",
-        format: "letter",
-      });
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "letter",
+    });
 
-      const hasUnicode = await ensureUnicodeFont(doc);
-      if (!hasUnicode) {
-        alert(
-          "Could not load font for ₱. Ensure /public/fonts/NotoSans-Regular.ttf exists."
-        );
-        return;
-      }
+    const hasUnicode = await ensureUnicodeFont(doc);
+    const bgDataUrl = await loadBgImageAsDataUrl();
 
-      const marginX = 40;
-      let cursorY = 40;
+    const pageSize = doc.internal.pageSize;
+    const pageWidth = pageSize.width || pageSize.getWidth();
+    const pageHeight = pageSize.height || pageSize.getHeight();
+    const centerX = pageWidth / 2;
 
-      doc.setFont(FONT_NAME, "bold");
-      doc.setFontSize(18);
-      doc.text(title, marginX, cursorY);
-      cursorY += 22;
+    // 🔹 Background first (behind everything)
+    if (bgDataUrl) {
+      doc.addImage(bgDataUrl, "PNG", 0, 0, pageWidth, pageHeight);
+    }
 
-      doc.setFont(FONT_NAME, "normal");
-      doc.setFontSize(12);
-      const rangeTxt =
-        from || to
-          ? `Date range: ${from || "—"} to ${to || "—"}`
-          : "Date range: All";
-      doc.text(`${subtitle}`, marginX, cursorY);
-      cursorY += 16;
-      doc.text(rangeTxt, marginX, cursorY);
-      cursorY += 12;
+    // 👉 TOP/BOTTOM MARGINS
+    const firstPageTop = 158;
+    const otherPagesTop = 72;
+    const marginBottom = 72;
+    const marginX = 40;
+
+    let cursorY = firstPageTop;
+
+    // 👉 UPPERCASE SUBTITLE (like first code)
+    const subtitleHeader = String(subtitle || "").toUpperCase();
+
+    // Helper: "November 27, 2025"
+    const formatPrettyDate = (raw) => {
+      if (!raw) return null;
+      const dt = parseDate(raw);
+      if (!dt) return null;
+      const monthNames = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      const month = monthNames[dt.getMonth()];
+      const day = dt.getDate();
+      const year = dt.getFullYear();
+      return `${month} ${day}, ${year}`;
+    };
+
+    const prettyFrom = formatPrettyDate(rawFrom);
+    const prettyTo = formatPrettyDate(rawTo);
+
+    const rangeTxt =
+      prettyFrom || prettyTo
+        ? `Date range: ${prettyFrom || "—"} to ${prettyTo || "—"}`
+        : "Date range: All";
+
+    // ===== HEADER (fonts same as first code) =====
+    // Title – helvetica bold
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text(title, centerX, cursorY, { align: "center" });
+    cursorY += 22;
+
+    // Subtitle – helvetica bold, UPPERCASE
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(subtitleHeader, centerX, cursorY, { align: "center" });
+    cursorY += 40;
+
+    // Date range – right aligned, body font
+    doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(rangeTxt, pageWidth - marginX, cursorY, { align: "right" });
+
+    cursorY += 10;
 
       const moneyCols = MONEY_COLS[subtitle] || new Set();
       const columnStyles = {};
@@ -817,7 +886,7 @@ const ReportTable = forwardRef(function ReportTable(
 
       const bodySafe = rowsForExport;
 
-      /* ===== Footer for Sales Records ===== */
+      /* ===== Footer for Sales Records (unchanged logic) ===== */
       let footRows = undefined;
       if (subtitle === "Sales Records") {
         const completedRows = (sourceData || []).filter(
@@ -859,44 +928,56 @@ const ReportTable = forwardRef(function ReportTable(
       }
 
       autoTable(doc, {
+        // first page = cursorY (~158) + 8; next pages use margin.top below
         startY: cursorY + 8,
         head: [headers],
         body: bodySafe,
         styles: {
-          font: FONT_NAME,
+          font: hasUnicode ? FONT_NAME : "helvetica",
           fontSize: 9,
           cellPadding: 4,
           halign: "center",
         },
         headStyles: {
+          font: "helvetica",
+          fontSize: 10,
           fillColor: [255, 210, 77],
           textColor: [33, 33, 33],
         },
         columnStyles,
         foot: footRows,
         footStyles: {
-          font: FONT_NAME,
+          font: hasUnicode ? FONT_NAME : "helvetica",
           fontStyle: "bold",
           fillColor: [255, 248, 225],
           textColor: [17, 24, 39],
           halign: "right",
         },
+        margin: {
+          top: otherPagesTop, // ✅ 2nd page and beyond: 72
+          bottom: marginBottom,
+          left: marginX,
+          right: marginX,
+        },
         didDrawPage: () => {
-          const pageSize = doc.internal.pageSize;
-          const pageHeight = pageSize.height
-            ? pageSize.height
-            : pageSize.getHeight();
-          doc.setFont(FONT_NAME, "normal");
+          const pageSizeInner = doc.internal.pageSize;
+          const pageHeightInner =
+            pageSizeInner.height || pageSizeInner.getHeight();
+          doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
           doc.setFontSize(10);
-          doc.text(`Page ${doc.getNumberOfPages()}`, marginX, pageHeight - 20);
+          doc.text(
+            `Page ${doc.getNumberOfPages()}`,
+            marginX,
+            pageHeightInner - marginBottom / 2
+          );
         },
       });
 
       const safeName =
         filename ||
-        `${subtitle.replace(/\s+/g, "_").toLowerCase()}_${
-          from || "all"
-        }_${to || "all"}.pdf`;
+        `${String(subtitle || "")
+          .replace(/\s+/g, "_")
+          .toLowerCase()}_${rawFrom || "all"}_${rawTo || "all"}.pdf`;
       doc.save(safeName);
     },
   }));
