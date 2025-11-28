@@ -42,11 +42,11 @@ export const sidebarItems = [
         path: { "super-admin": "/super-admin/users" },
         roles: ["super-admin"],
       },
-      {
-        label: "Suspicious Activities",
-        path: { "super-admin": "/super-admin/suspicious-activities" },
-        roles: ["super-admin"],
-      },
+      // {
+      //   label: "Suspicious Activities",
+      //   path: { "super-admin": "/super-admin/suspicious-activities" },
+      //   roles: ["super-admin"],
+      // },
     ],
   },
   // Admin: single link (no dropdown)
@@ -58,18 +58,18 @@ export const sidebarItems = [
   },
 
   // Super Admin only
-  {
-    label: "Product Management",
-    path: { "super-admin": "/super-admin/product-management" },
-    icon: RiShoppingBag3Line,
-    roles: ["super-admin"],
-  },
-  {
-    label: "Orders",
-    path: { "super-admin": "/super-admin/orders" },
-    icon: GrBasket,
-    roles: ["super-admin"],
-  },
+  // {
+  //   label: "Product Management",
+  //   path: { "super-admin": "/super-admin/product-management" },
+  //   icon: RiShoppingBag3Line,
+  //   roles: ["super-admin"],
+  // },
+  // {
+  //   label: "Orders",
+  //   path: { "super-admin": "/super-admin/orders" },
+  //   icon: GrBasket,
+  //   roles: ["super-admin"],
+  // },
   {
     label: "Pricing Management",
     path: { "super-admin": "/super-admin/pricing" },

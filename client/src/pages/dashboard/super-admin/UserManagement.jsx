@@ -1,3 +1,4 @@
+// src/pages/super-admin/user-management/index.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import DashboardCard from "../../../components/DashboardCard";
 import { LuUsers } from "react-icons/lu";
@@ -6,7 +7,13 @@ import { FaUserLock } from "react-icons/fa";
 import AdminVerTable from "../../../components/super-admin/tables/AdminVerTable";
 import UserTable from "../../../components/UserTable";
 import { DatePicker } from "@mui/x-date-pickers";
-// import { listUsers /* suspendUsers */ } from "../../../api/user"; // still removed
+
+import {
+  fetchUserTotals,
+  fetchUsers,
+  createUserWithPassword,
+  suspendUser,
+} from "@/services/superadminUsers";
 
 const USER_TABS = ["All", "Admin", "Farmer", "Buyer"];
 const ADMIN_VER_TABS = ["Pending", "Approved", "Rejected"];
@@ -16,79 +23,190 @@ export default function UserManagement() {
   const [selectedAdminOption, setSelectedAdminOption] = useState("Pending");
   const [dateFilter, setDateFilter] = useState(null);
 
-  // selections coming from the table
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // data state (starts empty; no mock seeding)
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [errorUsers, setErrorUsers] = useState(null);
 
-  // KPI counts
-  const { adminCount, farmerCount, buyerCount } = useMemo(() => {
-    const byRoleActive = (r) =>
-      users.filter(
-        (u) => u.role?.toLowerCase() === r && u.status?.toLowerCase() === "active"
-      ).length;
-    return {
-      adminCount: byRoleActive("admin"),
-      farmerCount: byRoleActive("farmer"),
-      buyerCount: byRoleActive("buyer"),
-    };
-  }, [users]);
+  const [totals, setTotals] = useState({
+    total_admins: 0,
+    total_farmers: 0,
+    total_buyers: 0,
+  });
 
-  // rows for UserTable based on current tab + (optional) date filter
-  const rowsForTable = useMemo(() => {
-    return users.filter((u) => {
-      const roleMatch =
-        selectedUserOption === "All"
-          ? true
-          : u.role?.toLowerCase() === selectedUserOption.toLowerCase();
-
-      // optional created_at day match
-      let dateMatch = true;
-      if (dateFilter && u.created_at) {
-        const d = new Date(u.created_at);
-        const a = new Date(dateFilter);
-        dateMatch =
-          d.getFullYear() === a.getFullYear() &&
-          d.getMonth() === a.getMonth() &&
-          d.getDate() === a.getDate();
-      }
-      return roleMatch && dateMatch;
-    });
-  }, [users, selectedUserOption, dateFilter]);
-
-  // === Toolbar actions ===
   const [showAddModal, setShowAddModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  // ─────────────────────────────────────────
+  // INITIAL TOTALS
+  // ─────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const t = await fetchUserTotals();
+        setTotals(t || { total_admins: 0, total_farmers: 0, total_buyers: 0 });
+      } catch (err) {
+        console.error("[totals] error:", err);
+      }
+    })();
+  }, []);
+
+  // ─────────────────────────────────────────
+  // LOAD USERS WHEN FILTERS CHANGE
+  // ─────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      setLoadingUsers(true);
+      setErrorUsers(null);
+      try {
+        const role =
+          selectedUserOption === "All"
+            ? null
+            : selectedUserOption.toLowerCase();
+
+        let createdOn = null;
+        if (dateFilter) {
+          const d =
+            typeof dateFilter === "string"
+              ? new Date(dateFilter)
+              : new Date(dateFilter);
+          createdOn = d.toISOString().slice(0, 10);
+        }
+
+        const rows = await fetchUsers({ role, createdOn });
+        setUsers(rows || []);
+      } catch (err) {
+        console.error("[users] error:", err);
+        setErrorUsers(err.message || "Failed to load users");
+      } finally {
+        setLoadingUsers(false);
+      }
+    })();
+  }, [selectedUserOption, dateFilter]);
+
+  // ─────────────────────────────────────────
+  // KPI COUNTS
+  // ─────────────────────────────────────────
+  const adminCount = totals.total_admins ?? 0;
+  const farmerCount = totals.total_farmers ?? 0;
+  const buyerCount = totals.total_buyers ?? 0;
+
+  const rowsForTable = useMemo(() => users, [users]);
+
+  // existing emails / phones for duplicate check
+  const existingEmails = useMemo(
+    () =>
+      (users || [])
+        .map((u) => (u.email || "").toLowerCase())
+        .filter(Boolean),
+    [users]
+  );
+
+  const existingPhones = useMemo(
+    () =>
+      (users || [])
+        .map((u) => u.contact_no || u.phone || "")
+        .filter(Boolean),
+    [users]
+  );
+
   const handleAddUser = () => setShowAddModal(true);
 
+  // ─────────────────────────────────────────
+  // SUSPEND HANDLERS
+  // ─────────────────────────────────────────
+  const reloadUsers = async () => {
+    const role =
+      selectedUserOption === "All"
+        ? null
+        : selectedUserOption.toLowerCase();
+    const rows = await fetchUsers({ role, createdOn: null });
+    setUsers(rows || []);
+  };
+
   const handleSuspendSelected = async () => {
-    alert(`Suspend ${selectedIds.length} user(s): ${selectedIds.join(", ")}`);
+    if (!selectedIds.length) return;
+    if (
+      !window.confirm(
+        `Suspend ${selectedIds.length} user(s)? They won't be able to log in.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await Promise.all(selectedIds.map((id) => suspendUser(id)));
+      await reloadUsers();
+      setSelectedIds([]);
+    } catch (err) {
+      alert(err.message || "Failed to suspend users");
+    }
   };
 
   const handleSuspendAll = async () => {
-    const allIds = rowsForTable.map((r) => r.id);
-    if (allIds.length === 0) {
+    if (!rowsForTable.length) {
       alert("No users in the current view to suspend.");
       return;
     }
-    alert(`Suspend ALL in view (${allIds.length}): ${allIds.join(", ")}`);
+    if (
+      !window.confirm(
+        `Suspend ALL users in current view (${rowsForTable.length})?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await Promise.all(rowsForTable.map((u) => suspendUser(u.user_id)));
+      await reloadUsers();
+      setSelectedIds([]);
+    } catch (err) {
+      alert(err.message || "Failed to suspend all users");
+    }
   };
 
+  // ─────────────────────────────────────────
+  // CREATE USER (FROM MODAL)
+  // ─────────────────────────────────────────
   async function handleCreateUser(payload) {
-    // still front-end only (optimistic add). plug backend later if needed.
-    const normalized = {
-      id: crypto.randomUUID(),
-      firstName: payload.first_name,
-      lastName: payload.last_name,
-      email: payload.email,
-      role: payload.role,
-      status: "Active",
-      created_at: new Date().toISOString(),
-    };
-    setUsers((prev) => [normalized, ...prev]);
-    setShowAddModal(false);
+    try {
+      setCreating(true);
+
+      // coop required for farmer
+      if (
+        payload.role &&
+        payload.role.toLowerCase() === "farmer" &&
+        !payload.coop_name?.trim()
+      ) {
+        throw new Error("Coop name is required for farmer users.");
+      }
+
+      const created = await createUserWithPassword(payload);
+
+      setUsers((prev) => [created, ...(prev || [])]);
+
+      try {
+        const t = await fetchUserTotals();
+        setTotals(t || totals);
+      } catch {
+        // ignore
+      }
+
+      setShowAddModal(false);
+    } catch (err) {
+      console.error("Create user failed:", err);
+      const msg = err?.message || "Failed to create user";
+
+      // extra safety: map common backend duplicate errors to friendly text
+      if (msg.includes("user_profile_contact_no_key")) {
+        alert("Phone number already exists. Please use a different number.");
+      } else if (msg.toLowerCase().includes("email") && msg.includes("23505")) {
+        alert("Email already exists. Please use a different email address.");
+      } else {
+        alert(msg);
+      }
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -110,7 +228,7 @@ export default function UserManagement() {
         data={buyerCount}
       />
 
-      {/* Toolbar: role tabs + date filter + action button(s) */}
+      {/* Toolbar */}
       <div className="col-span-3 flex items-center justify-between">
         <div className="flex gap-3">
           {USER_TABS.map((lbl) => (
@@ -210,14 +328,18 @@ export default function UserManagement() {
         <div className="flex gap-4">
           <button
             type="button"
-            onClick={() => alert("Approve clicked (wire up bulkVerify here)")}
+            onClick={() =>
+              alert("Approve clicked (wire up bulkVerify here later)")
+            }
             className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
           >
             Approve
           </button>
           <button
             type="button"
-            onClick={() => alert("Reject clicked (wire up bulkVerify here)")}
+            onClick={() =>
+              alert("Reject clicked (wire up bulkVerify here later)")
+            }
             className="bg-gray-500 text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
           >
             Reject
@@ -237,23 +359,39 @@ export default function UserManagement() {
           onClose={() => setShowAddModal(false)}
           onSave={handleCreateUser}
           roles={["Admin", "Farmer", "Buyer"]}
+          loading={creating}
+          existingEmails={existingEmails}
+          existingPhones={existingPhones}
         />
       )}
     </div>
   );
 }
 
-/* ── AddUserModal & helpers (unchanged UI; no required fields) ── */
-function AddUserModal({ open, onClose, onSave, roles = [] }) {
+/* ─────────────────────────────────────────
+ * AddUserModal & helpers
+ * ───────────────────────────────────────── */
+
+function AddUserModal({
+  open,
+  onClose,
+  onSave,
+  roles = [],
+  loading = false,
+  existingEmails = [],
+  existingPhones = [],
+}) {
   const dialogRef = useRef(null);
   const [form, setForm] = useState({
     last_name: "",
     first_name: "",
     middle_name: "",
-    sex: "",
+    sex: "female",
     phone: "",
     email: "",
     role: "",
+    coop_name: "",
+    password: "",
   });
 
   useEffect(() => {
@@ -262,11 +400,58 @@ function AddUserModal({ open, onClose, onSave, roles = [] }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const handleChange = (k, v) => setForm((s) => ({ ...s, [k]: v }));
+  const handleChange = (k, v) =>
+    setForm((s) => ({
+      ...s,
+      [k]: v,
+    }));
+
+  const validate = () => {
+    if (!form.last_name.trim()) return "Last name is required.";
+    if (!form.first_name.trim()) return "First name is required.";
+    if (!form.phone.trim()) return "Phone number is required.";
+    if (!form.email.trim()) return "Email is required.";
+    if (!form.role) return "Role is required.";
+    if (!form.password.trim()) return "Password is required.";
+
+    if (form.role.toLowerCase() === "farmer" && !form.coop_name.trim()) {
+      return "Coop name is required for farmer users.";
+    }
+
+    const emailLower = form.email.trim().toLowerCase();
+    if (existingEmails.includes(emailLower)) {
+      return "Email already exists. Please use a different email address.";
+    }
+
+    const phoneNorm = form.phone.trim();
+    if (existingPhones.includes(phoneNorm)) {
+      return "Phone number already exists. Please use a different number.";
+    }
+
+    return null;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave?.({ ...form });
+    const err = validate();
+    if (err) {
+      alert(err);
+      return;
+    }
+
+    onSave?.({
+      last_name: form.last_name.trim(),
+      first_name: form.first_name.trim(),
+      middle_name: form.middle_name.trim() || null,
+      sex: form.sex,
+      contact_no: form.phone.trim(),
+      email: form.email.trim(),
+      role: form.role,
+      coop_name: form.role.toLowerCase() === "farmer"
+        ? form.coop_name.trim()
+        : null,
+      password: form.password,
+    });
   };
 
   if (!open) return null;
@@ -276,13 +461,14 @@ function AddUserModal({ open, onClose, onSave, roles = [] }) {
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
         ref={dialogRef}
-        className="relative w-[770px] max-w-[90vw] bg-white rounded-2xl shadow-2xl p-6"
+        className="relative w-[860px] max-w-[95vw] bg-white rounded-2xl shadow-2xl p-6"
       >
         <h2 className="text-3xl font-bold text-center text-primaryYellow mb-6">
           Add New User
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Names */}
           <div className="grid grid-cols-3 gap-4">
             <Field
               label="Last Name"
@@ -304,6 +490,7 @@ function AddUserModal({ open, onClose, onSave, roles = [] }) {
             />
           </div>
 
+          {/* Sex / Phone / Email */}
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label>Sex</Label>
@@ -335,6 +522,7 @@ function AddUserModal({ open, onClose, onSave, roles = [] }) {
             />
           </div>
 
+          {/* Role / Coop / Password */}
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label>Role</Label>
@@ -346,28 +534,46 @@ function AddUserModal({ open, onClose, onSave, roles = [] }) {
                 >
                   <option value="">Select Role</option>
                   {roles.map((r) => (
-                    <option key={r} value={r}>
+                    <option key={r} value={r.toLowerCase()}>
                       {r}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+
+            <Field
+              label="Coop Name (for Farmer)"
+              placeholder="Enter Coop Name"
+              value={form.coop_name}
+              onChange={(v) => handleChange("coop_name", v)}
+            />
+
+            <Field
+              label="Password"
+              placeholder="Enter Password"
+              type="password"
+              value={form.password}
+              onChange={(v) => handleChange("password", v)}
+            />
           </div>
 
+          {/* Buttons */}
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="h-11 rounded-xl border border-gray-300 bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition"
+              disabled={loading}
+              className="h-11 rounded-xl border border-gray-300 bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="h-11 rounded-xl bg-primaryYellow text-white font-semibold hover:opacity-90 transition"
+              disabled={loading}
+              className="h-11 rounded-xl bg-primaryYellow text-white font-semibold hover:opacity-90 transition disabled:opacity-60"
             >
-              Add User
+              {loading ? "Adding..." : "Add User"}
             </button>
           </div>
         </form>
@@ -377,14 +583,19 @@ function AddUserModal({ open, onClose, onSave, roles = [] }) {
 }
 
 function Label({ children }) {
-  return <label className="block text-gray-700 font-semibold mb-2">{children}</label>;
+  return (
+    <label className="block text-gray-700 font-semibold mb-2">
+      {children}
+    </label>
+  );
 }
 
-function Field({ label, placeholder, value, onChange }) {
+function Field({ label, placeholder, value, onChange, type = "text" }) {
   return (
     <div>
       <Label>{label}</Label>
       <input
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -399,153 +610,22 @@ function RadioPill({ label, checked, onChange }) {
     <button
       type="button"
       onClick={onChange}
-      className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-300 text-gray-700 hover:border-primaryYellow transition"
+      className={`flex items-center gap-2 px-5 py-3 rounded-xl border text-gray-700 transition
+        ${
+          checked
+            ? "border-primaryYellow bg-yellow-50"
+            : "border-gray-300 hover:border-primaryYellow"
+        }`}
       aria-pressed={checked}
     >
       <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400">
-        <span className={`w-2 h-2 rounded-full ${checked ? "bg-primaryYellow" : "bg-transparent"}`} />
+        <span
+          className={`w-2 h-2 rounded-full ${
+            checked ? "bg-primaryYellow" : "bg-transparent"
+          }`}
+        />
       </span>
       {label}
     </button>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState } from "react";
-// import DashboardCard from "../../../components/DashboardCard";
-// import { LuUsers } from "react-icons/lu";
-// import { GiFarmTractor } from "react-icons/gi";
-// import { FaUserLock } from "react-icons/fa";
-// import AdminVerTable from "../../../components/super-admin/tables/AdminVerTable";
-// import UserTable from "../../../components/UserTable";
-// import { DatePicker } from "@mui/x-date-pickers";
-
-// export default function UserManagement() {
-//   const userOptions = ["Admin", "Farmer", "Buyer"];
-//   const adminOptions = ["Pending", "Approved", "Rejected"];
-
-//   const [selectedUserOption, setSelectedUserOption] = useState("Admin");
-//   const [selectedAdminOption, setSelectedAdminOption] = useState("Pending");
-
-//   const [value, onChange] = useState(new Date());
-
-//   return (
-//     <div className="grid grid-cols-3 gap-6 relative">
-//       {/* Cards */}
-//       <DashboardCard
-//         title="Total Active Admin Users"
-//         icon={<FaUserLock className="text-6xl text-primaryYellow" />}
-//         data={15300}
-//       />
-//       <DashboardCard
-//         title="Total Active Farmer Users"
-//         icon={<GiFarmTractor className="text-6xl text-primaryYellow" />}
-//         data={15300}
-//       />
-//       <DashboardCard
-//         title="Total Active Buyer Users"
-//         icon={<LuUsers className="text-6xl text-primaryYellow" />}
-//         data={15300}
-//       />
-
-//       {/* Filter Tabs */}
-//       <div className="col-span-3 flex flex-row justify-between items-center relative">
-//         <div className="flex flex-row gap-5">
-//           {userOptions.map((data) => (
-//             <div
-//               onClick={() => setSelectedUserOption(data)}
-//               className={`cursor-pointer rounded-xl px-5 py-2 transition-colors ${
-//                 selectedUserOption === data
-//                   ? "border border-primaryYellow text-primaryYellow bg-yellow-50"
-//                   : "border border-gray-300 text-gray-500 hover:border-primaryYellow hover:text-primaryYellow"
-//               }`}
-//               key={data}
-//             >
-//               {data}
-//             </div>
-//           ))}
-//         </div>
-
-//         {/* Filter by Date Button */}
-//         <DatePicker
-//           label="Filter by Date"
-//           onChange={(newValue) => onChange(newValue)}
-//           slotProps={{
-//             textField: {
-//               size: "small",
-//               sx: { width: 200 }, // 👈 set width here
-//             },
-//           }}
-//         />
-//       </div>
-
-//       {/* User Table */}
-//       <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg">
-//         <UserTable role="super-admin" option={selectedUserOption} />
-//       </div>
-
-//       {/* Admin Verification Section */}
-//       <div className="col-span-3 flex flex-row justify-between items-center">
-//         <div className="flex flex-col gap-5">
-//           <h1 className="font-bold text-primaryYellow text-2xl">
-//             Admin Verification
-//           </h1>
-//           <div className="flex flex-row gap-5">
-//             {adminOptions.map((data) => (
-//               <div
-//                 onClick={() => setSelectedAdminOption(data)}
-//                 className={`cursor-pointer rounded-xl px-5 py-2 transition-colors ${
-//                   selectedAdminOption === data
-//                     ? "border border-primaryYellow text-primaryYellow bg-yellow-50"
-//                     : "border border-gray-300 text-gray-500 hover:border-primaryYellow hover:text-primaryYellow"
-//                 }`}
-//                 key={data}
-//               >
-//                 {data}
-//               </div>
-//             ))}
-//           </div>
-//         </div>
-//         <div className="flex gap-5 h-full items-end">
-//           <div
-//             onClick={() => alert("clicked")}
-//             className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90"
-//           >
-//             <p className="text-lg">Approve</p>
-//           </div>
-//           <div
-//             onClick={() => alert("clicked")}
-//             className="bg-gray-500 text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90"
-//           >
-//             <p className="text-lg">Reject</p>
-//           </div>
-//         </div>
-//       </div>
-
-//       {/* Admin Verification Table */}
-//       <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg">
-//         <AdminVerTable option={selectedAdminOption} />
-//       </div>
-//     </div>
-//   );
-// }

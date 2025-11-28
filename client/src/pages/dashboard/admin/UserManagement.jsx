@@ -43,12 +43,12 @@ export default function UserManagement() {
       <DashboardCard
         title="Total Active Farmer Users"
         icon={<LuUserRound className="text-6xl text-primaryYellow" />}
-        data={15300}
+        data={5}
       />
       <DashboardCard
         title="Total Active Buyer Users"
         icon={<LuUserRound className="text-6xl text-primaryYellow" />}
-        data={15300}
+        data={22}
       />
 
       {/* Farmer Verification header */}
