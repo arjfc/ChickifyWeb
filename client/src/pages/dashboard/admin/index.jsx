@@ -27,6 +27,12 @@ import {
   getAdminNetIncomeBreakdown,
 } from "@/services/analytics";
 
+import {
+  fetchAdminFees,
+  adminSubmitRemittance,
+  uploadRemittanceProof,
+} from "@/services/Remittance";
+
 export default function AdminDashboard() {
   const [summary, setSummary] = useState({
     total_active_users: 0,
@@ -48,7 +54,7 @@ export default function AdminDashboard() {
   const [eggProduction, setEggProduction] = useState([]);
   const [forecast, setForecast] = useState([]);
 
-  // NEW: gross & net income donut data
+  // Gross & net income donut data
   const [grossIncomeDonut, setGrossIncomeDonut] = useState({
     labels: [],
     series: [],
@@ -60,16 +66,18 @@ export default function AdminDashboard() {
     raw: [],
   });
 
-  const [remitBalance] = useState(0);
-
+  // ✅ Remittance balance + states
+  const [remitBalance, setRemitBalance] = useState(0);
   const [infoOpen, setInfoOpen] = useState(false);
   const [remitOpen, setRemitOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
+  const [submittingRemit, setSubmittingRemit] = useState(false);
 
   useEffect(() => {
     (async () => {
+      // DASHBOARD SUMMARY
       try {
         const s = await getDashboardSummary();
         setSummary((prev) => ({ ...prev, ...s }));
@@ -77,6 +85,7 @@ export default function AdminDashboard() {
         console.error("[summary] error:", e);
       }
 
+      // SALES 7 DAYS
       try {
         const ts7 = await getSalesTimeseriesAdmin(7);
         setSalesTrend(ts7 || []);
@@ -84,6 +93,7 @@ export default function AdminDashboard() {
         console.error("[7d sales error]:", e);
       }
 
+      // SALES 30 DAYS (for Sales30Chart)
       try {
         const ts30 = await getSalesTimeseriesAdmin(30);
         setSales30(ts30 || []);
@@ -91,6 +101,7 @@ export default function AdminDashboard() {
         console.error("[30d sales error]:", e);
       }
 
+      // TOP PRODUCT
       try {
         const top = await getTopProductAdmin(30);
         setTopProduct(top);
@@ -98,6 +109,7 @@ export default function AdminDashboard() {
         console.error("[top product error]:", e);
       }
 
+      // CUSTOMER GROWTH
       try {
         const g = await getCustomerGrowth(30);
         setGrowth(g || []);
@@ -105,6 +117,7 @@ export default function AdminDashboard() {
         console.error("[growth error]:", e);
       }
 
+      // ORDER STATUS DONUT
       try {
         const donut = await getAdminOrderStatusBuckets();
         setOrderStatus(donut);
@@ -117,6 +130,7 @@ export default function AdminDashboard() {
         });
       }
 
+      // EGG PRODUCTION (30 days)
       try {
         const ep = await getEggProductionTimeseries(30);
         setEggProduction(ep || []);
@@ -124,24 +138,34 @@ export default function AdminDashboard() {
         console.error("[egg-production error]:", e);
       }
 
-      // NEW: Gross income donut
+      // GROSS INCOME DONUT
       try {
         const gi = await getAdminGrossIncomeBreakdown();
-        setGrossIncomeDonut(gi);
+        setGrossIncomeDonut(gi || { labels: [], series: [], raw: [] });
       } catch (e) {
         console.error("[gross income donut error]:", e);
         setGrossIncomeDonut({ labels: [], series: [], raw: [] });
       }
 
-      // NEW: Net income donut
+      // NET INCOME DONUT
       try {
         const ni = await getAdminNetIncomeBreakdown();
-        setNetIncomeDonut(ni);
+        setNetIncomeDonut(ni || { labels: [], series: [], raw: [] });
       } catch (e) {
         console.error("[net income donut error]:", e);
         setNetIncomeDonut({ labels: [], series: [], raw: [] });
       }
 
+      // REMITTANCE BALANCE (view_admin_fees)
+      try {
+        const { totalFees } = await fetchAdminFees();
+        setRemitBalance(totalFees);
+      } catch (e) {
+        console.error("[admin-fees] error:", e);
+        setRemitBalance(0);
+      }
+
+      // PRICE FORECAST
       const yr = new Date().getFullYear();
       setForecast(getCebuSeasonalPricesLocal(yr, 300));
     })();
@@ -149,17 +173,49 @@ export default function AdminDashboard() {
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0];
-    setFile(f);
+    setFile(f || null);
     setPreview(f ? URL.createObjectURL(f) : "");
   };
 
-  const onSubmitRemit = (e) => {
+  // ✅ FINAL REMITTANCE LOGIC
+  const onSubmitRemit = async (e) => {
     e.preventDefault();
-    alert("Remittance submitted!");
-    setRemitOpen(false);
-    setAmount("");
-    setFile(null);
-    setPreview("");
+
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      alert("Please enter a valid remittance amount.");
+      return;
+    }
+
+    setSubmittingRemit(true);
+
+    try {
+      // 1) Upload file → Supabase Storage
+      let imgUrl = null;
+      if (file) {
+        imgUrl = await uploadRemittanceProof(file);
+      }
+
+      // 2) Call RPC
+      await adminSubmitRemittance({
+        amount: amt,
+        img: imgUrl, // stored in cash_ledger.img
+      });
+
+      // 3) Refresh balance from view_admin_fees
+      const { totalFees } = await fetchAdminFees();
+      setRemitBalance(totalFees);
+
+      // 4) Reset modal
+      setRemitOpen(false);
+      setAmount("");
+      setFile(null);
+      setPreview("");
+    } catch (err) {
+      alert(`Remittance failed. ${err?.message ?? ""}`);
+    } finally {
+      setSubmittingRemit(false);
+    }
   };
 
   return (
@@ -221,20 +277,22 @@ export default function AdminDashboard() {
         </div>
 
         {/* REMITTANCE CARD */}
-        <div className="col-span-1 p-6 rounded-lg border shadow-lg flex flex-col justify-between">
+        <div className="col-span-1 p-6 rounded-lg border border-gray-200 shadow-lg flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-lg font-bold">Remittance Balance</div>
+              <div className="text-lg font-bold text-gray-800">
+                Remittance Balance
+              </div>
               <div className="text-xs text-gray-500">
-                Current total amount to remit this month.
+                Current total amount need to remit this month.
               </div>
             </div>
-
             <button
+              type="button"
               onClick={() => setInfoOpen(true)}
-              className="text-xs text-gray-500 hover:text-black"
+              className="text-gray-400 hover:text-gray-600"
             >
-              <IoInformationCircleOutline className="text-xl" />
+              <IoInformationCircleOutline className="w-5 h-5" />
             </button>
           </div>
 
@@ -243,15 +301,15 @@ export default function AdminDashboard() {
               ₱{Number(remitBalance).toLocaleString()}
             </div>
             <div className="text-xs text-gray-500 mt-1">
-              Updated based on ledger and cleared payouts.
+              Based on this month’s cleared sales and ledger rules.
             </div>
           </div>
 
           <button
             onClick={() => setRemitOpen(true)}
-            className="mt-6 w-full rounded-lg bg-primaryYellow py-2 font-semibold hover:brightness-95"
+            className="mt-auto w-full rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95"
           >
-            Remit
+            Submit Remittance
           </button>
         </div>
       </div>
@@ -311,7 +369,7 @@ export default function AdminDashboard() {
         <PriceForecastChart data={forecast} />
       </div>
 
-      {/* MODALS — INFO */}
+      {/* MODAL — INFO */}
       {infoOpen && (
         <div className="fixed inset-0 z-50">
           <div
@@ -326,13 +384,14 @@ export default function AdminDashboard() {
 
             <p className="text-sm text-gray-700">
               Remittance Balance is the total amount your co-op must remit to
-              the Super Admin.
+              the Super Admin for this period, based on fees and transactions
+              recorded in the ledger.
             </p>
 
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setInfoOpen(false)}
-                className="rounded-lg border px-4 py-2"
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
               >
                 Got it
               </button>
@@ -341,29 +400,34 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* MODALS — REMITTANCE */}
+      {/* MODAL — REMITTANCE */}
       {remitOpen && (
         <div className="fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => setRemitOpen(false)}
           />
+
           <form
             onSubmit={onSubmitRemit}
             className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-xl"
           >
-            <div className="flex justify-between mb-4">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-primaryYellow">
                 Submit Remittance
               </h3>
-              <button onClick={() => setRemitOpen(false)} type="button">
+              <button
+                type="button"
+                onClick={() => setRemitOpen(false)}
+                className="text-gray-500 hover:text-black"
+              >
                 ✕
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium">
+                <label className="block text-sm font-medium mb-1">
                   Amount Remitted (₱)
                 </label>
                 <input
@@ -373,42 +437,49 @@ export default function AdminDashboard() {
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full rounded-lg border px-3 py-2"
+                  placeholder="e.g. 15000.00"
+                  className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-primaryYellow"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium">
-                  Proof of Remittance
+                <label className="block text-sm font-medium mb-1">
+                  Proof of Remittance (image)
                 </label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
+                  className="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-gray-200 file:bg-gray-50 file:px-3 file:py-2 file:text-sm hover:file:bg-gray-100"
                 />
                 {preview && (
-                  <img
-                    src={preview}
-                    className="mt-3 w-full max-h-[60vh] rounded-lg border object-contain"
-                  />
+                  <div className="mt-3 w-full">
+                    <img
+                      src={preview}
+                      alt="Remittance proof preview"
+                      className="w-full h-auto max-h-[60vh] rounded-lg border object-contain"
+                    />
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex w-full gap-3">
               <button
                 type="button"
                 onClick={() => setRemitOpen(false)}
-                className="flex-1 rounded-lg border py-2"
+                className="flex-1 basis-0 rounded-lg border py-2 text-sm hover:bg-gray-50"
+                disabled={submittingRemit}
               >
                 Cancel
               </button>
+
               <button
                 type="submit"
-                disabled={!amount || Number(amount) <= 0}
-                className="flex-1 rounded-lg bg-primaryYellow py-2 font-semibold"
+                className="flex-1 basis-0 rounded-lg bg-primaryYellow py-2 font-semibold text:black hover:brightness-95 disabled:opacity-60"
+                disabled={!amount || Number(amount) <= 0 || submittingRemit}
               >
-                Submit
+                {submittingRemit ? "Submitting..." : "Submit"}
               </button>
             </div>
           </form>
