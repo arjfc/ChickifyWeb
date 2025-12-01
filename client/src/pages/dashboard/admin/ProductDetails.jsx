@@ -14,9 +14,12 @@ import {
   listMyProducts,
   upsertProduct,
   uploadProductImage,
+  fetchCoopBasePrices,
+  upsertCoopBasePrice,
 } from "@/services/Products";
 
 import { getMyUserProfile, hasProfileAddress } from "@/services/Profile";
+
 
 /* ---------- Small toast helper ---------- */
 function Toast({ toast, onClose }) {
@@ -93,7 +96,7 @@ const modalStyle2 = {
   },
 };
 
-// Static base price guide (just a visual reference for admins)
+// Static base price guide (still just visual / fallback)
 const basePriceSizes = [
   { size: "Extra Large", id: "xl", number: 220 },
   { size: "Large", id: "lg", number: 200 },
@@ -134,6 +137,19 @@ export default function ProductDetails() {
   // base price info modal
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const handleInfoModal = () => setIsInfoModalOpen((s) => !s);
+
+  // coop base price data (from RPC)
+  const [coopBasePrices, setCoopBasePrices] = useState([]);
+
+  // edit base price modal state
+  const [editBasePriceState, setEditBasePriceState] = useState({
+    open: false,
+    sizeId: null,
+    sizeLabel: "",
+    globalPrice: null,
+  });
+  const [editBasePriceValue, setEditBasePriceValue] = useState("");
+  const [savingBasePrice, setSavingBasePrice] = useState(false);
 
   // toast state
   const [toast, setToast] = useState(null);
@@ -188,7 +204,7 @@ export default function ProductDetails() {
     }
   }
 
-  /* ---------- initial data ---------- */
+  /* ---------- initial dropdown data ---------- */
   useEffect(() => {
     (async () => {
       const [cats, sz] = await Promise.all([listCategories(), listSizes()]);
@@ -217,7 +233,22 @@ export default function ProductDetails() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  /* ---------- data list ---------- */
+  /* ---------- coop base price list ---------- */
+  async function reloadCoopBasePrices() {
+    try {
+      const rows = await fetchCoopBasePrices();
+      setCoopBasePrices(rows);
+    } catch (e) {
+      console.error("coop_list_baseprice error:", e);
+      notify(e.message || "Failed to load base prices", "error", "Error");
+    }
+  }
+
+  useEffect(() => {
+    reloadCoopBasePrices();
+  }, []);
+
+  /* ---------- product list ---------- */
   async function reloadList() {
     try {
       setLoading(true);
@@ -325,6 +356,33 @@ export default function ProductDetails() {
     [current]
   );
 
+  /* ---------- Save coop base price ---------- */
+  async function onSaveBasePrice(e) {
+    e.preventDefault();
+    const value = Number(editBasePriceValue);
+    if (!Number.isFinite(value) || value <= 0) {
+      notify(
+        "Please enter a valid positive price per tray.",
+        "warning",
+        "Invalid value"
+      );
+      return;
+    }
+
+    try {
+      setSavingBasePrice(true);
+      await upsertCoopBasePrice(editBasePriceState.sizeId, value);
+      notify("Base price updated.", "success", "Saved");
+      setEditBasePriceState((s) => ({ ...s, open: false }));
+      await reloadCoopBasePrices();
+    } catch (err) {
+      console.error("coop_upsert_baseprice error:", err);
+      notify(err.message || "Failed to update base price", "error", "Error");
+    } finally {
+      setSavingBasePrice(false);
+    }
+  }
+
   return (
     <>
       <Toast toast={toast} onClose={() => setToast(null)} />
@@ -413,13 +471,13 @@ export default function ProductDetails() {
           </Card>
         </div>
 
-        {/* CURRENT BASE PRICE CARD (guide) */}
+        {/* CURRENT BASE PRICE CARD (guide + coop override) */}
         <div className="col-span-2">
           <div className="flex flex-col gap-3 p-4 rounded-lg border border-gray-200 shadow-lg">
             <div className="flex flex-row justify-between items-center">
               <div className="flex flex-row gap-2 items-center">
                 <h1 className="text-lg md:text-xl text-primaryYellow font-semibold">
-                  Current Base Price of Tray
+                  Current Base Price of Tray (This Coop)
                 </h1>
                 <FaCircleInfo
                   onClick={handleInfoModal}
@@ -429,16 +487,74 @@ export default function ProductDetails() {
               </div>
             </div>
 
+            {/* NEW: dynamic coop base prices */}
             <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
-              {basePriceSizes.map((data) => (
-                <SmallCard
-                  size={data.size}
-                  id={data.id}
-                  key={data.id}
-                  number={data.number}
-                />
-              ))}
+              {coopBasePrices.map((row) => {
+                const effective =
+                  row.coop_price_per_tray ??
+                  row.global_price_per_tray ??
+                  0;
+
+                return (
+                  <div
+                    key={row.size_id}
+                    className="flex flex-col rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+                  >
+                    <div className="text-sm font-semibold text-gray-700">
+                      {row.size_description}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {row.eggs_per_tray} eggs / tray
+                    </div>
+
+                    <div className="mt-2 text-xs text-gray-500">
+                      Global base:{" "}
+                      {row.global_price_per_tray != null
+                        ? `₱${Number(
+                            row.global_price_per_tray
+                          ).toFixed(2)}`
+                        : "—"}
+                    </div>
+
+                    <div className="mt-1 text-sm font-bold text-primaryYellow">
+                      Coop price: ₱{Number(effective).toFixed(2)}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditBasePriceState({
+                          open: true,
+                          sizeId: row.size_id,
+                          sizeLabel: row.size_description,
+                          globalPrice: row.global_price_per_tray,
+                        });
+                        setEditBasePriceValue(
+                          String(
+                            row.coop_price_per_tray ??
+                              row.global_price_per_tray ??
+                              ""
+                          )
+                        );
+                      }}
+                      className="mt-3 text-xs px-2 py-1 rounded-md border border-primaryYellow text-primaryYellow hover:bg-primaryYellow hover:text-white"
+                    >
+                      Edit price
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* if RPC returns nothing yet */}
+              {coopBasePrices.length === 0 && (
+                <div className="col-span-full text-sm text-gray-400">
+                  No sizes found. Check your <code>size</code> table.
+                </div>
+              )}
             </div>
+
+         
+         
           </div>
         </div>
 
@@ -748,6 +864,80 @@ export default function ProductDetails() {
               <p className="text-lg">Okay</p>
             </div>
           </div>
+        </Modal>
+
+        {/* EDIT BASE PRICE MODAL */}
+        <Modal
+          isOpen={editBasePriceState.open}
+          onRequestClose={() =>
+            setEditBasePriceState((s) => ({ ...s, open: false }))
+          }
+          style={modalBaseStyle}
+          ariaHideApp={false}
+        >
+          <form
+            onSubmit={onSaveBasePrice}
+            className="flex flex-col gap-4 p-4 sm:p-6"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-lg font-bold text-primaryYellow">
+                Edit Base Price – {editBasePriceState.sizeLabel}
+              </h2>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditBasePriceState((s) => ({ ...s, open: false }))
+                }
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Global base price:{" "}
+              {editBasePriceState.globalPrice != null
+                ? `₱${Number(editBasePriceState.globalPrice).toFixed(2)}`
+                : "—"}
+            </p>
+
+            <div className="flex flex-col">
+              <label className="mb-1 text-sm font-medium">
+                Coop price per tray (₱)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editBasePriceValue}
+                onChange={(e) => setEditBasePriceValue(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-gray-700"
+                required
+              />
+              <span className="mt-1 text-xs text-gray-400">
+                This price is used for this coop only. It does not change the
+                global base price.
+              </span>
+            </div>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setEditBasePriceState((s) => ({ ...s, open: false }))
+                }
+                className="flex-1 rounded-lg border py-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingBasePrice}
+                className="flex-1 rounded-lg bg-primaryYellow py-2 font-semibold text-white disabled:opacity-60"
+              >
+                {savingBasePrice ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
         </Modal>
       </div>
     </>

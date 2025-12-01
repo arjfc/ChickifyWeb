@@ -151,9 +151,34 @@ export async function uploadProductImage(file) {
   return data.publicUrl;
 }
 
+function assertNoError(error) {
+  if (error) throw error;
+}
+
+export async function fetchCoopBasePrices() {
+  const { data, error } = await supabase.rpc("coop_list_baseprice");
+  assertNoError(error);
+  return data ?? [];
+}
+
+/**
+ * Update coop base price (per tray) for a given size
+ * RPC: coop_upsert_baseprice(p_size_id, p_price_per_tray)
+ */
+export async function upsertCoopBasePrice(sizeId, pricePerTray) {
+  const { data, error } = await supabase.rpc("coop_upsert_baseprice", {
+    p_size_id: sizeId,
+    p_price_per_tray: pricePerTray,
+  });
+  assertNoError(error);
+  return data;
+}
+
 /* ---- optional: quick debug to ensure you're in the right project ---- */
 export async function debugListBuckets() {
   const { data, error } = await supabase.storage.listBuckets();
   if (error) throw error;
   return data.map((b) => b.name);
+
+
 }

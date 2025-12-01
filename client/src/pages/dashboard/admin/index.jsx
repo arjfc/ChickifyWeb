@@ -27,6 +27,13 @@ import {
   getAdminNetIncomeBreakdown,
 } from "@/services/analytics";
 
+// 🔁 Remittance services
+import {
+  fetchAdminFees,
+  adminSubmitRemittance,
+  uploadRemittanceProof,
+} from "@/services/Remittance";
+
 export default function AdminDashboard() {
   const [summary, setSummary] = useState({
     total_active_users: 0,
@@ -48,7 +55,7 @@ export default function AdminDashboard() {
   const [eggProduction, setEggProduction] = useState([]);
   const [forecast, setForecast] = useState([]);
 
-  // NEW: gross & net income donut data
+  // Gross & net income donut data
   const [grossIncomeDonut, setGrossIncomeDonut] = useState({
     labels: [],
     series: [],
@@ -60,13 +67,14 @@ export default function AdminDashboard() {
     raw: [],
   });
 
-  const [remitBalance] = useState(0);
-
+  // Remittance state (from Remittance index)
+  const [remitBalance, setRemitBalance] = useState(0);
   const [infoOpen, setInfoOpen] = useState(false);
   const [remitOpen, setRemitOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
+  const [submittingRemit, setSubmittingRemit] = useState(false);
 
   // Pretty label for "this month"
   const monthLabel = new Date().toLocaleString("default", {
@@ -133,6 +141,7 @@ export default function AdminDashboard() {
         });
       }
 
+      // Egg production
       try {
         const ep = await getEggProductionTimeseries(30);
         setEggProduction(ep || []);
@@ -140,7 +149,7 @@ export default function AdminDashboard() {
         console.error("[egg-production error]:", e);
       }
 
-      // NEW: Gross income donut – current month
+      // Gross income donut – current month
       try {
         const gi = await getAdminGrossIncomeBreakdown();
         setGrossIncomeDonut(gi);
@@ -149,13 +158,22 @@ export default function AdminDashboard() {
         setGrossIncomeDonut({ labels: [], series: [], raw: [] });
       }
 
-      // NEW: Net income donut – current month
+      // Net income donut – current month
       try {
         const ni = await getAdminNetIncomeBreakdown();
         setNetIncomeDonut(ni);
       } catch (e) {
         console.error("[net income donut error]:", e);
         setNetIncomeDonut({ labels: [], series: [], raw: [] });
+      }
+
+      // Remittance balance from view_admin_fees
+      try {
+        const { totalFees } = await fetchAdminFees();
+        setRemitBalance(totalFees);
+      } catch (e) {
+        console.error("[admin-fees] error:", e);
+        setRemitBalance(0);
       }
 
       const yr = new Date().getFullYear();
@@ -165,17 +183,49 @@ export default function AdminDashboard() {
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0];
-    setFile(f);
+    setFile(f || null);
     setPreview(f ? URL.createObjectURL(f) : "");
   };
 
-  const onSubmitRemit = (e) => {
+  // ✅ full remittance submit logic using RPC + storage
+  const onSubmitRemit = async (e) => {
     e.preventDefault();
-    alert("Remittance submitted!");
-    setRemitOpen(false);
-    setAmount("");
-    setFile(null);
-    setPreview("");
+
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      alert("Please enter a valid remittance amount.");
+      return;
+    }
+
+    setSubmittingRemit(true);
+
+    try {
+      // 1) Upload file
+      let imgUrl = null;
+      if (file) {
+        imgUrl = await uploadRemittanceProof(file);
+      }
+
+      // 2) Call RPC to record remittance
+      await adminSubmitRemittance({
+        amount: amt,
+        img: imgUrl,
+      });
+
+      // 3) Refresh balance
+      const { totalFees } = await fetchAdminFees();
+      setRemitBalance(totalFees);
+
+      // 4) Reset UI
+      setRemitOpen(false);
+      setAmount("");
+      setFile(null);
+      setPreview("");
+    } catch (err) {
+      alert(`Remittance failed. ${err?.message ?? ""}`);
+    } finally {
+      setSubmittingRemit(false);
+    }
   };
 
   return (
@@ -204,7 +254,7 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* GROSS + NET INCOME + REMIT */}
+      {/* GROSS + NET INCOME + REMITTANCE */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* GROSS INCOME */}
         <div className="col-span-1 lg:col-span-2 p-6 rounded-lg border shadow-lg">
@@ -218,7 +268,9 @@ export default function AdminDashboard() {
             <div className="text-right">
               <div className="text-xs text-gray-500">Total this month</div>
               <div className="text-lg font-bold text-emerald-700">
-                ₱{grossTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                ₱{grossTotal.toLocaleString(undefined, {
+                  maximumFractionDigits: 2,
+                })}
               </div>
             </div>
           </div>
@@ -238,7 +290,9 @@ export default function AdminDashboard() {
             <div className="text-right">
               <div className="text-xs text-gray-500">Total this month</div>
               <div className="text-lg font-bold text-emerald-700">
-                ₱{netTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                ₱{netTotal.toLocaleString(undefined, {
+                  maximumFractionDigits: 2,
+                })}
               </div>
             </div>
           </div>
@@ -252,7 +306,7 @@ export default function AdminDashboard() {
             <div>
               <div className="text-lg font-bold">Remittance Balance</div>
               <div className="text-xs text-gray-500">
-                Current total amount to remit this month.
+                Current total amount need to remit this month.
               </div>
             </div>
 
@@ -269,7 +323,7 @@ export default function AdminDashboard() {
               ₱{Number(remitBalance).toLocaleString()}
             </div>
             <div className="text-xs text-gray-500 mt-1">
-              Updated based on ledger and cleared payouts.
+              Based on this month’s cleared sales and ledger rules.
             </div>
           </div>
 
@@ -277,7 +331,7 @@ export default function AdminDashboard() {
             onClick={() => setRemitOpen(true)}
             className="mt-6 w-full rounded-lg bg-primaryYellow py-2 font-semibold hover:brightness-95"
           >
-            Remit
+            Submit Remittance
           </button>
         </div>
       </div>
@@ -337,7 +391,7 @@ export default function AdminDashboard() {
         <PriceForecastChart data={forecast} />
       </div>
 
-      {/* MODALS — INFO */}
+      {/* INFO MODAL */}
       {infoOpen && (
         <div className="fixed inset-0 z-50">
           <div
@@ -345,20 +399,26 @@ export default function AdminDashboard() {
             onClick={() => setInfoOpen(false)}
           />
           <div className="absolute left-1/2 top-1/2 w-[90vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-xl">
-            <div className="flex justify-between mb-2">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-bold">What is Remittance Balance?</h3>
-              <button onClick={() => setInfoOpen(false)}>✕</button>
+              <button
+                className="text-gray-500 hover:text-black"
+                onClick={() => setInfoOpen(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
             </div>
-
-            <p className="text-sm text-gray-700">
-              Remittance Balance is the total amount your co-op must remit to
-              the Super Admin.
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Remittance Balance is the total amount your co-op (you) needs to
+              remit to the Super Admin this month. It includes fees from farmer
+              payouts, buyer orders, and platform charges tracked in the cash
+              ledger.
             </p>
-
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setInfoOpen(false)}
-                className="rounded-lg border px-4 py-2"
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
               >
                 Got it
               </button>
@@ -367,7 +427,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* MODALS — REMITTANCE */}
+      {/* REMITTANCE MODAL */}
       {remitOpen && (
         <div className="fixed inset-0 z-50">
           <div
@@ -378,18 +438,23 @@ export default function AdminDashboard() {
             onSubmit={onSubmitRemit}
             className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-xl"
           >
-            <div className="flex justify-between mb-4">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-primaryYellow">
                 Submit Remittance
               </h3>
-              <button onClick={() => setRemitOpen(false)} type="button">
+              <button
+                className="text-gray-500 hover:text-black"
+                onClick={() => setRemitOpen(false)}
+                type="button"
+                aria-label="Close"
+              >
                 ✕
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium">
+                <label className="block text-sm font-medium mb-1">
                   Amount Remitted (₱)
                 </label>
                 <input
@@ -399,42 +464,55 @@ export default function AdminDashboard() {
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full rounded-lg border px-3 py-2"
+                  placeholder="e.g. 15000.00"
+                  className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-primaryYellow"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Tip: You can remit partially. Remaining balance will be
+                  updated after posting.
+                </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium">
-                  Proof of Remittance
+                <label className="block text-sm font-medium mb-1">
+                  Proof of Remittance (image)
                 </label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
+                  className="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-gray-200 file:bg-gray-50 file:px-3 file:py-2 file:text-sm hover:file:bg-gray-100"
                 />
                 {preview && (
-                  <img
-                    src={preview}
-                    className="mt-3 w-full max-h-[60vh] rounded-lg border object-contain"
-                  />
+                  <div className="mt-3 w-full">
+                    <img
+                      src={preview}
+                      alt="Remittance proof preview"
+                      className="w-full h-auto max-h-[60vh] rounded-lg border object-contain"
+                    />
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex w-full gap-3">
               <button
                 type="button"
                 onClick={() => setRemitOpen(false)}
-                className="flex-1 rounded-lg border py-2"
+                className="flex-1 basis-0 rounded-lg border py-2 text-sm hover:bg-gray-50"
+                disabled={submittingRemit}
               >
                 Cancel
               </button>
+
               <button
                 type="submit"
-                disabled={!amount || Number(amount) <= 0}
-                className="flex-1 rounded-lg bg-primaryYellow py-2 font-semibold"
+                className="flex-1 basis-0 rounded-lg bg-primaryYellow py-2 font-semibold text-black hover:brightness-95 disabled:opacity-60"
+                disabled={
+                  !amount || Number(amount) <= 0 || submittingRemit
+                }
               >
-                Submit
+                {submittingRemit ? "Submitting..." : "Submit"}
               </button>
             </div>
           </form>

@@ -77,11 +77,11 @@ const FarmerRequestsTable = forwardRef(
       });
     };
 
-    const onApprove = async (id) => {
-      setBusyId(id);
+    const onApprove = async (row) => {
+      setBusyId(row.id);
       setErrorMsg("");
       try {
-        await approveFarmerRequest(id);
+        await approveFarmerRequest(row);  // ⬅️ pass whole row
         await refresh();
         onActionComplete && onActionComplete();
       } catch (e) {
@@ -91,12 +91,12 @@ const FarmerRequestsTable = forwardRef(
       }
     };
 
-    const onReject = async (id) => {
+    const onReject = async (row) => {
       const reason = window.prompt("Reason (optional):") || undefined;
-      setBusyId(id);
+      setBusyId(row.id);
       setErrorMsg("");
       try {
-        await rejectFarmerRequest(id, reason);
+        await rejectFarmerRequest(row, reason);  // ⬅️ pass row + reason
         await refresh();
         onActionComplete && onActionComplete();
       } catch (e) {
@@ -112,7 +112,10 @@ const FarmerRequestsTable = forwardRef(
         setErrorMsg("");
         try {
           for (let id of selected) {
-            await approveFarmerRequest(id);
+            const row = rows.find((r) => r.id === id);
+            if (row) {
+              await approveFarmerRequest(row); // this will also send emails
+            }
           }
           await refresh();
           onActionComplete && onActionComplete();
@@ -197,14 +200,14 @@ const FarmerRequestsTable = forwardRef(
                       </button>
 
                       <button
-                        onClick={() => onApprove(r.id)}
+                        onClick={() => onApprove(r)}
                         disabled={busyId === r.id}
                         className="px-4 py-2 rounded-lg bg-primaryYellow text-white font-medium shadow hover:opacity-90 disabled:opacity-60"
                       >
                         Approve
                       </button>
                       <button
-                        onClick={() => onReject(r.id)}
+                        onClick={() => onReject(r)}
                         disabled={busyId === r.id}
                         className="px-4 py-2 rounded-lg bg-[#5c5c5d] text-white font-medium shadow hover:opacity-90 disabled:opacity-60"
                       >
