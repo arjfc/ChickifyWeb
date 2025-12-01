@@ -8,8 +8,10 @@ export async function addTruckingProfileForAdmin(payload) {
     truck_number,
     phone_number,
     plate_number,
+    capacity,
+    time_window,
     is_active,
-    weekly_schedule_days, // from the modal
+    weekly_schedule_days,
   } = payload;
 
   const { data, error } = await supabase.rpc(
@@ -20,21 +22,20 @@ export async function addTruckingProfileForAdmin(payload) {
       p_truck_number: truck_number,
       p_phone_number: phone_number || null,
       p_plate_number: plate_number,
+      p_capacity: capacity != null ? Number(capacity) : 0,
+      p_time_window: time_window?.trim() || null,
       p_is_active: is_active,
-      // 👇 THIS is the important part
       p_weekly_schedule: weekly_schedule_days || [],
     }
   );
 
   if (error) {
-    console.error("createTruckingProfile error:", error);
+    console.error("add_trucking_profile_with_schedule error:", error);
     throw error;
   }
 
-  // function returns the inserted row
   return data;
 }
-
 
 export function formatWeeklySchedule(arr) {
   if (!arr || !Array.isArray(arr) || arr.length === 0) {
@@ -45,14 +46,12 @@ export function formatWeeklySchedule(arr) {
     .map((d) => {
       const s = String(d || "").trim().toLowerCase();
       if (!s) return "";
-      return s.charAt(0).toUpperCase() + s.slice(1); // monday -> Monday
+      return s.charAt(0).toUpperCase() + s.slice(1);
     })
     .filter(Boolean)
     .join(", ");
 }
-/**
- * Fetch all drivers for the current admin.
- */
+
 export async function fetchTruckingProfiles(includeInactive = true) {
   const { data, error } = await supabase.rpc(
     "get_trucking_profiles_for_admin",
@@ -66,11 +65,12 @@ export async function fetchTruckingProfiles(includeInactive = true) {
 
   const rows = data || [];
 
-  // Normalize & add a preformatted label for the table
   return rows.map((row) => {
     const weekly = row.weekly_schedule || [];
     return {
       ...row,
+      capacity: row.capacity != null ? Number(row.capacity) : 0,
+      time_window: row.time_window || null,
       weekly_schedule: weekly,
       weekly_schedule_label: formatWeeklySchedule(weekly),
     };

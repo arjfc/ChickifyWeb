@@ -13,6 +13,7 @@ import {
   listFarmerRecipients,
   listBuyerRecipients,
 } from "@/services/Messages";
+import { supabase } from "@/lib/supabase";
 
 function formatTime(ts) {
   if (!ts) return "";
@@ -98,6 +99,48 @@ export default function Messages() {
   }
 
   /* ---------------------------------------------------------------------- */
+  /* Realtime subscription for active thread                               */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    if (!activeThreadId) return;
+
+    const channel = supabase
+      .channel(`admin-thread-${activeThreadId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message",
+          filter: `thread_id=eq.${activeThreadId}`,
+        },
+        (payload) => {
+          const row = payload.new;
+
+          setMessages((prev) => {
+            // avoid duplicates
+            if (prev.some((m) => m.message_id === row.message_id)) return prev;
+
+            const next = [...prev, row];
+            next.sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            );
+            return next;
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log("[Realtime admin messages] status:", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeThreadId]);
+
+  /* ---------------------------------------------------------------------- */
   /* Send message                                                           */
   /* ---------------------------------------------------------------------- */
   async function handleSend() {
@@ -122,8 +165,9 @@ export default function Messages() {
         body: text,
       });
 
-      // reload to get canonical order / ids
-      await loadMessages(activeThreadId);
+      // The realtime subscription will bring in the real row.
+      // We can optionally refetch to be 100% canonical:
+      // await loadMessages(activeThreadId);
     } catch (err) {
       console.error("Send message failed:", err);
       alert(err.message || "Failed to send message.");
@@ -140,7 +184,6 @@ export default function Messages() {
     setRecipientsLoading(true);
     try {
       const rows = await listFarmerRecipients();
-      // map to simple shape for UI
       const mapped = (rows || []).map((r) => ({
         userId: r.user_id,
         name: r.full_name || r.email || "Farmer",
@@ -158,7 +201,7 @@ export default function Messages() {
 
   async function openBuyerPicker() {
     setOpenBuyerModal(true);
-    if (buyerList.length) return; // already loaded
+    if (buyerList.length) return;
 
     setRecipientsLoading(true);
     try {
@@ -189,7 +232,6 @@ export default function Messages() {
         return;
       }
 
-      // reload threads and set this as active
       await reloadThreads(false);
 
       const id = thread.thread_id;

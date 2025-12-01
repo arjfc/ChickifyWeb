@@ -1,9 +1,8 @@
-
 // src/components/admin/tables/TruckingTable.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
 /**
- * Expected row shape:
+ * Expected row shape from fetchTruckingProfiles():
  * {
  *   tracking_profile_id: number;
  *   name: string;
@@ -11,29 +10,54 @@ import React, { useMemo, useState } from "react";
  *   truck_number: string;
  *   phone_number?: string | null;
  *   plate_number: string;
+ *   capacity?: number | null;
+ *   time_window?: string | null;
  *   is_active: boolean;
- *   weekly_schedule?: string[]; // e.g. ['monday','wednesday']
- *   weekly_schedule_label?: string; // optional preformatted
+ *   weekly_schedule?: string[]; // ['monday','wednesday']
+ *   weekly_schedule_label?: string;
  * }
+ *
+ * Props:
+ * - rows: driver rows
+ * - onAddDriver: () => void
+ * - onSelectionChange: (ids: number[]) => void
+ * - shippingMode: 'pickup' | 'delivery' | string   // 👈 NEW
  */
 export default function TruckingTable({
   rows = [],
   onAddDriver,
   onSelectionChange,
+  shippingMode = "delivery", // default
 }) {
   const [companyFilter, setCompanyFilter] = useState("all");
   const [scheduleDayFilter, setScheduleDayFilter] = useState("all");
   const [searchName, setSearchName] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // Unique company list for filter
-  const companies = useMemo(() => {
-    const set = new Set();
-    rows.forEach((r) => {
-      if (r.company_name) set.add(r.company_name);
-    });
-    return Array.from(set);
-  }, [rows]);
+  const isPickupMode = (shippingMode || "").toLowerCase() === "pickup";
+
+  // If mode switches to pickup, clear any selected drivers
+  useEffect(() => {
+    if (isPickupMode && selectedIds.length > 0) {
+      setSelectedIds([]);
+      onSelectionChange?.([]);
+    }
+  }, [isPickupMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Today (0=Sun..6=Sat) → "sunday".."saturday"
+  const todayKey = useMemo(() => {
+    const jsDay = new Date().getDay();
+    const map = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    return map[jsDay];
+  }, []);
 
   const WEEK_DAYS = [
     "monday",
@@ -45,25 +69,36 @@ export default function TruckingTable({
     "sunday",
   ];
 
+  // Unique company list for filter
+  const companies = useMemo(() => {
+    const set = new Set();
+    rows.forEach((r) => {
+      if (r.company_name) set.add(r.company_name);
+    });
+    return Array.from(set);
+  }, [rows]);
+
+  const isDriverAvailableToday = (row) => {
+    const days = (row.weekly_schedule || []).map((d) =>
+      String(d || "").toLowerCase()
+    );
+    return days.includes(todayKey);
+  };
+
   // Filter logic
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
-      // Company filter
       if (companyFilter !== "all" && row.company_name !== companyFilter) {
         return false;
       }
 
-      // Schedule day filter
       if (scheduleDayFilter !== "all") {
         const days = (row.weekly_schedule || []).map((d) =>
           String(d || "").toLowerCase()
         );
-        if (!days.includes(scheduleDayFilter)) {
-          return false;
-        }
+        if (!days.includes(scheduleDayFilter)) return false;
       }
 
-      // Name search (case-insensitive)
       if (
         searchName.trim() &&
         !row.name.toLowerCase().includes(searchName.trim().toLowerCase())
@@ -75,13 +110,19 @@ export default function TruckingTable({
     });
   }, [rows, companyFilter, scheduleDayFilter, searchName]);
 
-  // Selection logic
-  const allVisibleIds = filteredRows.map((r) => r.tracking_profile_id);
+  // Selection logic – only drivers scheduled today are selectable,
+  // and only when NOT pickup mode.
+  const allVisibleIds = filteredRows
+    .filter((row) => !isPickupMode && isDriverAvailableToday(row))
+    .map((r) => r.tracking_profile_id);
+
   const isAllSelected =
     allVisibleIds.length > 0 &&
     allVisibleIds.every((id) => selectedIds.includes(id));
 
   const toggleAll = () => {
+    if (isPickupMode) return; // selection disabled on pickup
+
     let newSelected;
     if (isAllSelected) {
       newSelected = selectedIds.filter((id) => !allVisibleIds.includes(id));
@@ -94,7 +135,10 @@ export default function TruckingTable({
     onSelectionChange?.(newSelected);
   };
 
-  const toggleOne = (id) => {
+  const toggleOne = (id, row) => {
+    if (isPickupMode) return; // selection disabled on pickup
+    if (!isDriverAvailableToday(row)) return;
+
     let newSelected;
     if (selectedIds.includes(id)) {
       newSelected = selectedIds.filter((x) => x !== id);
@@ -137,6 +181,20 @@ export default function TruckingTable({
           + Add driver
         </button>
       </div>
+
+      {/* Hint */}
+      {isPickupMode ? (
+        <p className="text-xs text-red-500">
+          This order is set to <span className="font-semibold">pickup</span>.
+          Trucking drivers cannot be assigned.
+        </p>
+      ) : (
+        <p className="text-xs text-gray-500">
+          Only drivers whose schedule includes{" "}
+          <span className="font-semibold capitalize">{todayKey}</span> can be
+          selected for trucking today.
+        </p>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
@@ -204,6 +262,12 @@ export default function TruckingTable({
                   className="h-4 w-4 accent-yellow-400"
                   checked={isAllSelected}
                   onChange={toggleAll}
+                  disabled={allVisibleIds.length === 0 || isPickupMode}
+                  title={
+                    isPickupMode
+                      ? "Pickup order: trucking selection disabled."
+                      : ""
+                  }
                 />
               </th>
               <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-left">
@@ -222,6 +286,12 @@ export default function TruckingTable({
                 Plate Number
               </th>
               <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
+                Capacity
+              </th>
+              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
+                Time Window
+              </th>
+              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
                 Weekly Schedule
               </th>
               <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
@@ -234,7 +304,7 @@ export default function TruckingTable({
             {filteredRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={10}
                   className="px-3 py-6 text-center text-sm text-gray-500"
                 >
                   No drivers found with the current filters.
@@ -244,13 +314,16 @@ export default function TruckingTable({
               filteredRows.map((row) => {
                 const id = row.tracking_profile_id;
                 const selected = selectedIds.includes(id);
+                const availableToday = isDriverAvailableToday(row);
 
                 return (
                   <tr
                     key={id}
                     className={
                       "border-b border-gray-100 transition-colors " +
-                      (selected ? "bg-yellow-50" : "hover:bg-[#FFF8D6]")
+                      (selected
+                        ? "bg-yellow-50"
+                        : "hover:bg-[#FFF8D6] bg-white")
                     }
                   >
                     <td className="px-3 py-4 align-middle text-center">
@@ -258,7 +331,17 @@ export default function TruckingTable({
                         type="checkbox"
                         className="h-4 w-4 accent-yellow-400"
                         checked={selected}
-                        onChange={() => toggleOne(id)}
+                        disabled={
+                          isPickupMode || !availableToday
+                        }
+                        title={
+                          isPickupMode
+                            ? "Pickup order: trucking selection disabled."
+                            : availableToday
+                            ? ""
+                            : "Driver not scheduled today. Cannot pick."
+                        }
+                        onChange={() => toggleOne(id, row)}
                       />
                     </td>
 
@@ -280,6 +363,16 @@ export default function TruckingTable({
 
                     <td className="px-3 py-4 align-middle text-gray-700 text-center">
                       {row.plate_number}
+                    </td>
+
+                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
+                      {row.capacity != null && row.capacity !== ""
+                        ? row.capacity
+                        : "—"}
+                    </td>
+
+                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
+                      {row.time_window || "—"}
                     </td>
 
                     <td className="px-3 py-4 align-middle text-gray-700 text-center">

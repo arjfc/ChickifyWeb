@@ -68,6 +68,22 @@ export default function AdminDashboard() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
 
+  // Pretty label for "this month"
+  const monthLabel = new Date().toLocaleString("default", {
+    month: "long",
+    year: "numeric",
+  });
+
+  // Totals from donut data
+  const grossTotal = (grossIncomeDonut.series || []).reduce(
+    (sum, v) => sum + (Number(v) || 0),
+    0
+  );
+  const netTotal = (netIncomeDonut.series || []).reduce(
+    (sum, v) => sum + (Number(v) || 0),
+    0
+  );
+
   useEffect(() => {
     (async () => {
       try {
@@ -124,7 +140,7 @@ export default function AdminDashboard() {
         console.error("[egg-production error]:", e);
       }
 
-      // NEW: Gross income donut
+      // NEW: Gross income donut – current month
       try {
         const gi = await getAdminGrossIncomeBreakdown();
         setGrossIncomeDonut(gi);
@@ -133,7 +149,7 @@ export default function AdminDashboard() {
         setGrossIncomeDonut({ labels: [], series: [], raw: [] });
       }
 
-      // NEW: Net income donut
+      // NEW: Net income donut – current month
       try {
         const ni = await getAdminNetIncomeBreakdown();
         setNetIncomeDonut(ni);
@@ -192,14 +208,19 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* GROSS INCOME */}
         <div className="col-span-1 lg:col-span-2 p-6 rounded-lg border shadow-lg">
-          <div className="mb-1 text-sm text-gray-500">Gross Income</div>
+          <div className="mb-1 text-sm text-gray-500">
+            Gross Income – {monthLabel}
+          </div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-base font-semibold text-gray-800">
-              Order Status
+              Gross Earnings (Before Fees)
             </h3>
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600">
-              <span className="text-[10px]">📈</span> +0%
-            </span>
+            <div className="text-right">
+              <div className="text-xs text-gray-500">Total this month</div>
+              <div className="text-lg font-bold text-emerald-700">
+                ₱{grossTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </div>
+            </div>
           </div>
 
           <IncomeDonutChart data={grossIncomeDonut} />
@@ -207,14 +228,19 @@ export default function AdminDashboard() {
 
         {/* NET INCOME */}
         <div className="col-span-1 p-6 rounded-lg border shadow-lg">
-          <div className="mb-1 text-sm text-gray-500">Net Income</div>
+          <div className="mb-1 text-sm text-gray-500">
+            Net Income – {monthLabel}
+          </div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-base font-semibold text-gray-800">
-              Order Status
+              Net Earnings (After Fees)
             </h3>
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600">
-              <span className="text-[10px]">📈</span> +0%
-            </span>
+            <div className="text-right">
+              <div className="text-xs text-gray-500">Total this month</div>
+              <div className="text-lg font-bold text-emerald-700">
+                ₱{netTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </div>
+            </div>
           </div>
 
           <IncomeDonutChart data={netIncomeDonut} />

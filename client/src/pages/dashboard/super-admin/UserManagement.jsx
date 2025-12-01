@@ -38,9 +38,7 @@ export default function UserManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  // ─────────────────────────────────────────
-  // INITIAL TOTALS
-  // ─────────────────────────────────────────
+  // Load KPI totals once
   useEffect(() => {
     (async () => {
       try {
@@ -52,9 +50,7 @@ export default function UserManagement() {
     })();
   }, []);
 
-  // ─────────────────────────────────────────
-  // LOAD USERS WHEN FILTERS CHANGE
-  // ─────────────────────────────────────────
+  // Load users whenever role / date filter changes
   useEffect(() => {
     (async () => {
       setLoadingUsers(true);
@@ -75,7 +71,7 @@ export default function UserManagement() {
         }
 
         const rows = await fetchUsers({ role, createdOn });
-        setUsers(rows || []);
+        setUsers(rows);
       } catch (err) {
         console.error("[users] error:", err);
         setErrorUsers(err.message || "Failed to load users");
@@ -85,51 +81,26 @@ export default function UserManagement() {
     })();
   }, [selectedUserOption, dateFilter]);
 
-  // ─────────────────────────────────────────
-  // KPI COUNTS
-  // ─────────────────────────────────────────
   const adminCount = totals.total_admins ?? 0;
   const farmerCount = totals.total_farmers ?? 0;
   const buyerCount = totals.total_buyers ?? 0;
 
   const rowsForTable = useMemo(() => users, [users]);
 
-  // existing emails / phones for duplicate check
-  const existingEmails = useMemo(
-    () =>
-      (users || [])
-        .map((u) => (u.email || "").toLowerCase())
-        .filter(Boolean),
-    [users]
-  );
-
-  const existingPhones = useMemo(
-    () =>
-      (users || [])
-        .map((u) => u.contact_no || u.phone || "")
-        .filter(Boolean),
-    [users]
-  );
-
   const handleAddUser = () => setShowAddModal(true);
 
-  // ─────────────────────────────────────────
-  // SUSPEND HANDLERS
-  // ─────────────────────────────────────────
   const reloadUsers = async () => {
     const role =
-      selectedUserOption === "All"
-        ? null
-        : selectedUserOption.toLowerCase();
+      selectedUserOption === "All" ? null : selectedUserOption.toLowerCase();
     const rows = await fetchUsers({ role, createdOn: null });
-    setUsers(rows || []);
+    setUsers(rows);
   };
 
   const handleSuspendSelected = async () => {
     if (!selectedIds.length) return;
     if (
       !window.confirm(
-        `Suspend ${selectedIds.length} user(s)? They won't be able to log in.`
+        `Suspend ${selectedIds.length} user(s)? They will no longer be able to log in.`
       )
     ) {
       return;
@@ -164,50 +135,69 @@ export default function UserManagement() {
     }
   };
 
-  // ─────────────────────────────────────────
-  // CREATE USER (FROM MODAL)
-  // ─────────────────────────────────────────
-  async function handleCreateUser(payload) {
-    try {
-      setCreating(true);
+  // called when modal submits
+  async function handleCreateUser(formPayload) {
+  try {
+    setCreating(true);
 
-      // coop required for farmer
-      if (
-        payload.role &&
-        payload.role.toLowerCase() === "farmer" &&
-        !payload.coop_name?.trim()
-      ) {
-        throw new Error("Coop name is required for farmer users.");
-      }
-
-      const created = await createUserWithPassword(payload);
-
-      setUsers((prev) => [created, ...(prev || [])]);
-
-      try {
-        const t = await fetchUserTotals();
-        setTotals(t || totals);
-      } catch {
-        // ignore
-      }
-
-      setShowAddModal(false);
-    } catch (err) {
-      console.error("Create user failed:", err);
-      const msg = err?.message || "Failed to create user";
-
-      // extra safety: map common backend duplicate errors to friendly text
-      if (msg.includes("user_profile_contact_no_key")) {
-        alert("Phone number already exists. Please use a different number.");
-      } else if (msg.toLowerCase().includes("email") && msg.includes("23505")) {
-        alert("Email already exists. Please use a different email address.");
-      } else {
-        alert(msg);
-      }
-    } finally {
-      setCreating(false);
+    // basic validations
+    if (!formPayload.email || !formPayload.password) {
+      throw new Error("Email and password are required.");
     }
+    if (!formPayload.phone) {
+      throw new Error("Phone number is required.");
+    }
+    if (!formPayload.first_name || !formPayload.last_name) {
+      throw new Error("First and last name are required.");
+    }
+    if (
+      formPayload.role?.toLowerCase() === "farmer" &&
+      !formPayload.coop_name?.trim()
+    ) {
+      throw new Error("Coop name is required for farmers.");
+    }
+
+    // call service (this handles auth.signUp + RPC v3)
+    const created = await createUserWithPassword({
+      email: formPayload.email,
+      password: formPayload.password,
+      role: formPayload.role,
+      first_name: formPayload.first_name,
+      middle_name: formPayload.middle_name,
+      last_name: formPayload.last_name,
+      phone: formPayload.phone,
+      sex: formPayload.sex,
+      coop_name: formPayload.coop_name,
+      house_number: formPayload.house_number,
+      street: formPayload.street,
+      barangay: formPayload.barangay,
+      city: formPayload.city,
+      province: formPayload.province,
+      postal_code: formPayload.postal_code,
+    });
+
+    // prepend new user to table (service normalizes s_user_id -> user_id)
+    if (created) {
+      setUsers((prev) => [created, ...prev]);
+    }
+
+    // refresh KPI totals (optional)
+    try {
+      const t = await fetchUserTotals();
+      setTotals(t || totals);
+    } catch (e) {
+      console.warn("[fetchUserTotals] after create failed:", e);
+    }
+
+    setShowAddModal(false);
+  } catch (err) {
+    console.error("[handleCreateUser] failed:", err);
+    alert(err.message || "Failed to create user");
+  } finally {
+    setCreating(false);
   }
+}
+
 
   return (
     <div className="grid grid-cols-3 gap-6">
@@ -228,7 +218,7 @@ export default function UserManagement() {
         data={buyerCount}
       />
 
-      {/* Toolbar */}
+      {/* Toolbar: role tabs + date filter + action button(s) */}
       <div className="col-span-3 flex items-center justify-between">
         <div className="flex gap-3">
           {USER_TABS.map((lbl) => (
@@ -300,57 +290,9 @@ export default function UserManagement() {
         )}
       </div>
 
-      {/* Admin Verification toolbar */}
-      <div className="col-span-3 flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-primaryYellow text-2xl mb-3">
-            Admin Verification
-          </h1>
-          <div className="flex gap-3">
-            {ADMIN_VER_TABS.map((lbl) => (
-              <button
-                key={lbl}
-                type="button"
-                onClick={() => setSelectedAdminOption(lbl)}
-                className={`px-4 py-2 rounded-xl border transition
-                  ${
-                    selectedAdminOption === lbl
-                      ? "border-primaryYellow bg-yellow-50 text-primaryYellow"
-                      : "border-gray-300 text-gray-600 hover:border-primaryYellow hover:text-primaryYellow"
-                  }`}
-              >
-                {lbl}
-              </button>
-            ))}
-          </div>
-        </div>
+      
 
-        <div className="flex gap-4">
-          <button
-            type="button"
-            onClick={() =>
-              alert("Approve clicked (wire up bulkVerify here later)")
-            }
-            className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              alert("Reject clicked (wire up bulkVerify here later)")
-            }
-            className="bg-gray-500 text-white font-medium rounded-lg px-5 py-2 hover:opacity-90"
-          >
-            Reject
-          </button>
-        </div>
-      </div>
-
-      {/* Admin Verification table */}
-      <div className="col-span-3 p-6 rounded-lg border border-gray-200 shadow-lg">
-        <AdminVerTable option={selectedAdminOption} />
-      </div>
+      
 
       {/* Add User Modal */}
       {showAddModal && (
@@ -360,27 +302,16 @@ export default function UserManagement() {
           onSave={handleCreateUser}
           roles={["Admin", "Farmer", "Buyer"]}
           loading={creating}
-          existingEmails={existingEmails}
-          existingPhones={existingPhones}
         />
       )}
     </div>
   );
 }
 
-/* ─────────────────────────────────────────
- * AddUserModal & helpers
- * ───────────────────────────────────────── */
-
-function AddUserModal({
-  open,
-  onClose,
-  onSave,
-  roles = [],
-  loading = false,
-  existingEmails = [],
-  existingPhones = [],
-}) {
+/* ────────────────────────────────
+   AddUserModal
+   ──────────────────────────────── */
+function AddUserModal({ open, onClose, onSave, roles = [], loading }) {
   const dialogRef = useRef(null);
   const [form, setForm] = useState({
     last_name: "",
@@ -389,9 +320,15 @@ function AddUserModal({
     sex: "female",
     phone: "",
     email: "",
-    role: "",
-    coop_name: "",
     password: "",
+    role: "Admin",
+    coop_name: "",
+    house_number: "",
+    street: "",
+    barangay: "",
+    city: "",
+    province: "",
+    postal_code: "",
   });
 
   useEffect(() => {
@@ -400,59 +337,14 @@ function AddUserModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const handleChange = (k, v) =>
-    setForm((s) => ({
-      ...s,
-      [k]: v,
-    }));
-
-  const validate = () => {
-    if (!form.last_name.trim()) return "Last name is required.";
-    if (!form.first_name.trim()) return "First name is required.";
-    if (!form.phone.trim()) return "Phone number is required.";
-    if (!form.email.trim()) return "Email is required.";
-    if (!form.role) return "Role is required.";
-    if (!form.password.trim()) return "Password is required.";
-
-    if (form.role.toLowerCase() === "farmer" && !form.coop_name.trim()) {
-      return "Coop name is required for farmer users.";
-    }
-
-    const emailLower = form.email.trim().toLowerCase();
-    if (existingEmails.includes(emailLower)) {
-      return "Email already exists. Please use a different email address.";
-    }
-
-    const phoneNorm = form.phone.trim();
-    if (existingPhones.includes(phoneNorm)) {
-      return "Phone number already exists. Please use a different number.";
-    }
-
-    return null;
-  };
+  const handleChange = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const err = validate();
-    if (err) {
-      alert(err);
-      return;
-    }
-
-    onSave?.({
-      last_name: form.last_name.trim(),
-      first_name: form.first_name.trim(),
-      middle_name: form.middle_name.trim() || null,
-      sex: form.sex,
-      contact_no: form.phone.trim(),
-      email: form.email.trim(),
-      role: form.role,
-      coop_name: form.role.toLowerCase() === "farmer"
-        ? form.coop_name.trim()
-        : null,
-      password: form.password,
-    });
+    onSave?.({ ...form });
   };
+
+  const isFarmer = form.role.toLowerCase() === "farmer";
 
   if (!open) return null;
 
@@ -461,7 +353,7 @@ function AddUserModal({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
         ref={dialogRef}
-        className="relative w-[860px] max-w-[95vw] bg-white rounded-2xl shadow-2xl p-6"
+        className="relative w-[900px] max-w-[95vw] bg-white rounded-2xl shadow-2xl p-8"
       >
         <h2 className="text-3xl font-bold text-center text-primaryYellow mb-6">
           Add New User
@@ -532,9 +424,8 @@ function AddUserModal({
                   onChange={(e) => handleChange("role", e.target.value)}
                   className="w-full bg-transparent outline-none"
                 >
-                  <option value="">Select Role</option>
                   {roles.map((r) => (
-                    <option key={r} value={r.toLowerCase()}>
+                    <option key={r} value={r}>
                       {r}
                     </option>
                   ))}
@@ -543,10 +434,11 @@ function AddUserModal({
             </div>
 
             <Field
-              label="Coop Name (for Farmer)"
-              placeholder="Enter Coop Name"
+              label="Coop Name (for Farmers)"
+              placeholder={isFarmer ? "Enter Coop Name" : "Not required"}
               value={form.coop_name}
               onChange={(v) => handleChange("coop_name", v)}
+              disabled={!isFarmer}
             />
 
             <Field
@@ -555,6 +447,49 @@ function AddUserModal({
               type="password"
               value={form.password}
               onChange={(v) => handleChange("password", v)}
+            />
+          </div>
+
+          {/* Address fields */}
+          <div className="grid grid-cols-3 gap-4">
+            <Field
+              label="House Number"
+              placeholder="Enter House Number"
+              value={form.house_number}
+              onChange={(v) => handleChange("house_number", v)}
+            />
+            <Field
+              label="Street"
+              placeholder="Enter Street"
+              value={form.street}
+              onChange={(v) => handleChange("street", v)}
+            />
+            <Field
+              label="Barangay"
+              placeholder="Enter Barangay"
+              value={form.barangay}
+              onChange={(v) => handleChange("barangay", v)}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <Field
+              label="City"
+              placeholder="Enter City"
+              value={form.city}
+              onChange={(v) => handleChange("city", v)}
+            />
+            <Field
+              label="Province"
+              placeholder="Enter Province"
+              value={form.province}
+              onChange={(v) => handleChange("province", v)}
+            />
+            <Field
+              label="Postal Code"
+              placeholder="Enter Postal Code"
+              value={form.postal_code}
+              onChange={(v) => handleChange("postal_code", v)}
             />
           </div>
 
@@ -573,7 +508,7 @@ function AddUserModal({
               disabled={loading}
               className="h-11 rounded-xl bg-primaryYellow text-white font-semibold hover:opacity-90 transition disabled:opacity-60"
             >
-              {loading ? "Adding..." : "Add User"}
+              {loading ? "Adding…" : "Add User"}
             </button>
           </div>
         </form>
@@ -590,16 +525,17 @@ function Label({ children }) {
   );
 }
 
-function Field({ label, placeholder, value, onChange, type = "text" }) {
+function Field({ label, placeholder, value, onChange, type = "text", disabled }) {
   return (
     <div>
       <Label>{label}</Label>
       <input
         type={type}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border px-4 py-3 shadow-sm outline-none focus:ring-2 border-gray-300 focus:ring-yellow-200"
+        className="w-full rounded-xl border px-4 py-3 shadow-sm outline-none focus:ring-2 border-gray-300 focus:ring-yellow-200 disabled:bg-gray-100 disabled:text-gray-400"
       />
     </div>
   );

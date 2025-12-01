@@ -1,3 +1,4 @@
+// src/services/Messages.js
 import { supabase } from "@/lib/supabase";
 import { getMyUserProfile } from "@/services/Profile";
 
@@ -22,9 +23,16 @@ export async function getMyThreads() {
 
   if (error) throw error;
 
+  // Sort threads: newest activity first (descending by last_time)
+  const threads = (data || []).sort((a, b) => {
+    const ta = a.last_time ? new Date(a.last_time).getTime() : 0;
+    const tb = b.last_time ? new Date(b.last_time).getTime() : 0;
+    return tb - ta;
+  });
+
   return {
     userId,
-    threads: data || [],
+    threads,
   };
 }
 
@@ -37,7 +45,48 @@ export async function getMessagesForThread(threadId) {
   });
 
   if (error) throw error;
-  return data || [];
+
+  // Ensure ascending order by created_at so newest is at bottom
+  return (data || []).sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
+/* -------------------------------------------------------------
+   REALTIME SUBSCRIPTION FOR A THREAD
+------------------------------------------------------------- */
+export function subscribeToThreadMessages(threadId, callback) {
+  if (!threadId) return () => {};
+
+  const channel = supabase
+    .channel(`thread-messages-${threadId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "message", // ← make sure your table is named `message`
+        filter: `thread_id=eq.${threadId}`,
+      },
+      (payload) => {
+        const row = payload.new;
+        callback?.({
+          message_id: row.message_id,
+          thread_id: row.thread_id,
+          sender_id: row.sender_id,
+          body: row.body,
+          file_url: row.file_url,
+          is_read: row.is_read,
+          created_at: row.created_at,
+        });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 /* -------------------------------------------------------------
@@ -66,9 +115,8 @@ export async function startThreadWith(partnerUserId) {
   });
 
   if (error) throw error;
-  return data?.[0] || null;   // will still work, RPC returns rows from message_thread
+  return data?.[0] || null; // RPC returns rows from message_thread
 }
-
 
 /* -------------------------------------------------------------
    SEND MESSAGE
@@ -104,5 +152,3 @@ export async function listBuyerRecipients() {
   if (error) throw error;
   return data || [];
 }
-
-

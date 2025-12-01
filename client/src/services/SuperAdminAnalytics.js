@@ -70,3 +70,56 @@ export async function getTotalAdminFees() {
   const row = Array.isArray(data) ? data[0] : data;
   return safeNum(row);
 }
+
+export async function getSalesTrendOverall(mode = "daily") {
+  const { data, error } = await supabase.rpc("superadmin_sales_trend", {
+    p_mode: mode,
+  });
+
+  if (error) {
+    console.error("[getSalesTrendOverall] error:", error);
+    throw error;
+  }
+  return data || [];
+}
+
+export async function getAdminFeesTimeseries(months = 6) {
+  const { data, error } = await supabase.rpc(
+    "superadmin_total_admin_fees",
+    {
+      p_month: month, // 1–12
+      p_year: year,   // e.g. 2024
+    }
+  );
+
+  if (error) {
+    console.error("[getTotalAdminFees] error:", error);
+    throw error;
+  }
+
+  // Supabase RPC returns a scalar directly
+  return Number(data ?? 0);
+}
+
+export async function getSuperAdminSalesTimeseries(pDays = 7) {
+  const { data, error } = await supabase.rpc("superadmin_sales_timeseries", {
+    p_days: pDays,
+  });
+
+  if (error) {
+    console.error("[superadmin_sales_timeseries] error:", error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function getRecentActivities(limit = 10) {
+  const { data, error } = await supabase.rpc(
+    "superadmin_recent_activities",
+    { p_limit: limit }
+  );
+
+  if (error) throw error;
+  return data ?? [];
+}

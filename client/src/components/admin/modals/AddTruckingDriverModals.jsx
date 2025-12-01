@@ -36,6 +36,9 @@ export default function AddDriverModal({ isOpen, onClose, onSubmit }) {
     truck_number: "",
     phone_number: "",
     plate_number: "",
+    capacity: "",
+    time_from: "", // NEW
+    time_to: "",   // NEW
     is_active: true,
   });
 
@@ -48,6 +51,9 @@ export default function AddDriverModal({ isOpen, onClose, onSubmit }) {
       form.company_name.trim() &&
       form.truck_number.trim() &&
       form.plate_number.trim() &&
+      form.capacity.toString().trim() &&
+      form.time_from.trim() &&
+      form.time_to.trim() &&
       weeklyDays.length > 0 &&
       !submitting
     );
@@ -71,6 +77,9 @@ export default function AddDriverModal({ isOpen, onClose, onSubmit }) {
       truck_number: "",
       phone_number: "",
       plate_number: "",
+      capacity: "",
+      time_from: "",
+      time_to: "",
       is_active: true,
     });
     setWeeklyDays([]);
@@ -81,11 +90,15 @@ export default function AddDriverModal({ isOpen, onClose, onSubmit }) {
     e?.preventDefault?.();
     if (!canSubmit) return;
 
+    // Build the time_window string the service expects
+    const time_window = `${form.time_from} - ${form.time_to}`;
+
     setSubmitting(true);
     try {
       await onSubmit({
         ...form,
-        weekly_schedule_days: weeklyDays, // ⬅ used by service/RPC
+        time_window,              // 👈 used by addTruckingProfileForAdmin
+        weekly_schedule_days: weeklyDays,
       });
       handleClose();
     } catch (err) {
@@ -176,6 +189,52 @@ export default function AddDriverModal({ isOpen, onClose, onSubmit }) {
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
             placeholder="ABC-1234"
           />
+        </div>
+
+        {/* Capacity */}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm text-gray-600 font-medium">
+            Capacity (e.g., trays / crates){" "}
+            <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={form.capacity}
+            onChange={(e) => updateField("capacity", e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            placeholder="Enter truck capacity"
+          />
+        </div>
+
+        {/* Time Window (using time pickers) */}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm text-gray-600 font-medium">
+            Time Window <span className="text-red-500">*</span>
+          </label>
+          <div className="flex gap-2">
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[11px] text-gray-500">Start time</span>
+              <input
+                type="time"
+                value={form.time_from}
+                onChange={(e) => updateField("time_from", e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full"
+              />
+            </div>
+            <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[11px] text-gray-500">End time</span>
+              <input
+                type="time"
+                value={form.time_to}
+                onChange={(e) => updateField("time_to", e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1">
+            Set the usual pickup/delivery time range for this driver.
+          </p>
         </div>
 
         {/* Weekly Schedule */}

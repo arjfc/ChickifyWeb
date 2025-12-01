@@ -161,44 +161,73 @@ export async function getEggProductionTimeseries(days = 90) {
 }
 
 /* ----------------------------------------------------------------
- * 5) GROSS & NET INCOME DONUTS (NEW)
+ * 5) GROSS & NET INCOME (MONTHLY) – NEW IMPLEMENTATION
  * ---------------------------------------------------------------- */
 
 /**
- * Gross Income breakdown donut.
- * RPC must return rows like: { label text, amount numeric }
+ * Helper: get first/last day (YYYY-MM-DD) for a month.
+ * If year/month not provided, use current month.
  */
-export async function getAdminGrossIncomeBreakdown() {
-  const { data, error } = await supabase.rpc(
-    "rpc_admin_gross_income_breakdown"
-  );
-  assertNoError(error);
+function getMonthRange(year, month) {
+  const now = new Date();
+  const y = year ?? now.getFullYear();
+  const m = month ?? now.getMonth() + 1; // 1–12
 
-  const rows = (data ?? []);
+  const start = new Date(Date.UTC(y, m - 1, 1));
+  const end = new Date(Date.UTC(y, m, 0)); // day 0 of next month = last day of this month
 
+  const fmt = (d) => d.toISOString().slice(0, 10);
   return {
-    labels: rows.map((r) => r.label),
-    series: rows.map((r) => Number(r.amount || 0)),
-    raw: rows,
+    from: fmt(start),
+    to: fmt(end),
   };
 }
 
 /**
- * Net Income breakdown donut.
- * RPC must return rows like: { label text, amount numeric }
+ * Gross Income for a given month (single slice donut-compatible).
+ * Uses RPC: view_gross_income_admin(p_date_from, p_date_to)
  */
-export async function getAdminNetIncomeBreakdown() {
-  const { data, error } = await supabase.rpc(
-    "rpc_admin_net_income_breakdown"
-  );
+export async function getAdminGrossIncomeBreakdown(year, month) {
+  const { from, to } = getMonthRange(year, month);
+
+  const { data, error } = await supabase.rpc("view_gross_income_admin", {
+    p_date_from: from,
+    p_date_to: to,
+  });
   assertNoError(error);
 
-  const rows = (data ?? []);
+  const row = Array.isArray(data) ? data[0] : data || null;
+  const label = row?.label ?? "Gross Income";
+  const amount = Number(row?.amount || 0);
 
   return {
-    labels: rows.map((r) => r.label),
-    series: rows.map((r) => Number(r.amount || 0)),
-    raw: rows,
+    labels: [label],
+    series: [amount],
+    raw: data ?? [],
+  };
+}
+
+/**
+ * Net Income for a given month (single slice donut-compatible).
+ * Uses RPC: view_net_income_admin(p_date_from, p_date_to)
+ */
+export async function getAdminNetIncomeBreakdown(year, month) {
+  const { from, to } = getMonthRange(year, month);
+
+  const { data, error } = await supabase.rpc("view_net_income_admin", {
+    p_date_from: from,
+    p_date_to: to,
+  });
+  assertNoError(error);
+
+  const row = Array.isArray(data) ? data[0] : data || null;
+  const label = row?.label ?? "Net Income";
+  const amount = Number(row?.amount || 0);
+
+  return {
+    labels: [label],
+    series: [amount],
+    raw: data ?? [],
   };
 }
 
@@ -212,7 +241,7 @@ export async function fetchFarmerPendingAllocations() {
     "admin_farmer_view_allocations"
   );
   if (error) throw error;
-  return (data ?? []);
+  return data ?? [];
 }
 
 /* ======= CONFIRM: eggs-first, trays still supported, full confirm by default ======= */
@@ -247,4 +276,3 @@ export const confirmMyAllocationByTrays = (id, trays, actorId) =>
 
 export const confirmMyAllocationByEggs = (id, eggs, actorId) =>
   confirmMyAllocation(id, { eggs, actorId: actorId ?? null });
-
