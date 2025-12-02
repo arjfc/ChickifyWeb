@@ -229,3 +229,15 @@ export async function fetchMyFarmersList(status = "approved") {
   const adminId = userRes.user.id; // must match v_admin_id.admin_id
   return fetchFarmersUnderCoop(adminId, status);
 }
+
+
+export async function fetchAdminProfile() {
+  const { data, error } = await supabase.rpc("view_admin_profile");
+
+  if (error) throw error;
+
+  const rows = Array.isArray(data) ? data : [];
+  // function always returns max 1 row (for auth.uid())
+  return rows[0] || null;
+}
+

@@ -2,7 +2,7 @@
 "use client";
 import React, {useEffect,useMemo,useState,forwardRef,useImperativeHandle,} from "react";
 import Table from "../../Table";
-import {fetchEggProduction,fetchEggBatch,fetchAdminSalesRecords,fetchPayoutOverviewList,fetchMyFarmersList,} from "@/services/Reports";
+import {fetchEggProduction,fetchEggBatch,fetchAdminSalesRecords,fetchPayoutOverviewList,fetchMyFarmersList, fetchAdminProfile } from "@/services/Reports";
 import { fetchTransactionsByAdmin, fetchFeesCollectedByAdmin, } from "@/services/TransactionLogs";
 
 // pdf libs
@@ -85,6 +85,15 @@ const ReportTable = forwardRef(function ReportTable(
 
   /* ======================== Background image (from public) ======================== */
   const BG_URL = "/background.png";
+  const COOP_ICON_URL = "/icons/chicken-coop.png";
+  const ADMIN_ICON_URL = "/icons/user.png";
+  const ADDRESS_ICON_URL = "/icons/pin.png";
+  const PHONE_ICON_URL = "/icons/telephone.png";
+  const EMAIL_ICON_URL = "/icons/email.png";
+
+
+
+
 
   const loadBgImageAsDataUrl = async () => {
     try {
@@ -105,6 +114,28 @@ const ReportTable = forwardRef(function ReportTable(
       return null;
     }
   };
+
+  
+// Generic loader for any image → DataURL
+const loadImageAsDataUrl = async (url) => {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn("[ReportTable] Failed to load icon:", url, e?.message || e);
+    return null;
+  }
+};
+
+
 
   /* ======================== date helpers ======================== */
   const parseDate = (d) => {
@@ -781,8 +812,9 @@ const ReportTable = forwardRef(function ReportTable(
       )
     );
   }, [sourceData, selectedOption]);
- /* ======================== export PDF (fonts now match 1st code) ======================== */
- useImperativeHandle(ref, () => ({
+  
+  /* ======================== export PDF (fonts now match 1st code) ======================== */
+useImperativeHandle(ref, () => ({
   async exportPdf(meta = {}) {
     const {
       title = "Chickify Admin Reports",
@@ -795,6 +827,26 @@ const ReportTable = forwardRef(function ReportTable(
     const rawFrom = fromProp;
     const rawTo = toProp;
 
+    // 🔹 Fetch admin/coop info via RPC
+    let coopName = "—";
+    let adminName = "—";
+    let adminAddress = "—";
+    let adminContact = "—";
+    let adminEmail = " ";
+
+    try {
+      const adminProfile = await fetchAdminProfile();
+      if (adminProfile) {
+        coopName = adminProfile.coop_name || "—";
+        adminName = adminProfile.admin_full_name || "—";
+        adminAddress = adminProfile.address || "—";
+        adminContact = adminProfile.contact_no || "—";
+        adminEmail = adminProfile.admin_email || "—";
+      }
+    } catch (e) {
+      console.warn("[ReportTable] Failed to load admin profile for PDF:", e);
+    }
+
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "pt",
@@ -802,14 +854,24 @@ const ReportTable = forwardRef(function ReportTable(
     });
 
     const hasUnicode = await ensureUnicodeFont(doc);
-    const bgDataUrl = await loadBgImageAsDataUrl();
+
+    // 🔹 Load background + icon images (PNG)
+    const [bgDataUrl, coopIcon, adminIcon, addressIcon, phoneIcon, emailIcon] =
+      await Promise.all([
+        loadBgImageAsDataUrl(),
+        loadImageAsDataUrl(COOP_ICON_URL),
+        loadImageAsDataUrl(ADMIN_ICON_URL),
+        loadImageAsDataUrl(ADDRESS_ICON_URL),
+        loadImageAsDataUrl(PHONE_ICON_URL),
+        loadImageAsDataUrl(EMAIL_ICON_URL),
+      ]);
 
     const pageSize = doc.internal.pageSize;
     const pageWidth = pageSize.width || pageSize.getWidth();
     const pageHeight = pageSize.height || pageSize.getHeight();
     const centerX = pageWidth / 2;
 
-    // 🔹 Background first (behind everything)
+    // 🔹 Background first
     if (bgDataUrl) {
       doc.addImage(bgDataUrl, "PNG", 0, 0, pageWidth, pageHeight);
     }
@@ -822,13 +884,13 @@ const ReportTable = forwardRef(function ReportTable(
 
     let cursorY = firstPageTop;
 
-    // 👉 UPPERCASE SUBTITLE (like first code)
+    // 👉 UPPERCASE SUBTITLE
     const subtitleHeader = String(subtitle || "").toUpperCase();
 
     // Helper: "November 27, 2025"
-    const formatPrettyDate = (raw) => {
-      if (!raw) return null;
-      const dt = parseDate(raw);
+    const formatPrettyDate = (dRaw) => {
+      if (!dRaw) return null;
+      const dt = parseDate(dRaw);
       if (!dt) return null;
       const monthNames = [
         "January",
@@ -858,129 +920,219 @@ const ReportTable = forwardRef(function ReportTable(
         ? `Date range: ${prettyFrom || "—"} to ${prettyTo || "—"}`
         : "Date range: All";
 
-    // ===== HEADER (fonts same as first code) =====
-    // Title – helvetica bold
+    // 🔹 "Generated on" date/time
+    const formatDateTimeLong = (dt) => {
+      const monthNames = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      const month = monthNames[dt.getMonth()];
+      const day = dt.getDate();
+      const year = dt.getFullYear();
+
+      let hours = dt.getHours();
+      const minutes = String(dt.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+
+      return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
+    };
+
+    const generatedNow = new Date();
+    const generatedTxt = `Generated on: ${formatDateTimeLong(generatedNow)}`;
+
+    // ===== HEADER (same as 2nd code) =====
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
     doc.text(title, centerX, cursorY, { align: "center" });
     cursorY += 22;
 
-    // Subtitle – helvetica bold, UPPERCASE
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.text(subtitleHeader, centerX, cursorY, { align: "center" });
     cursorY += 40;
 
-    // Date range – right aligned, body font
     doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
     doc.setFontSize(11);
     doc.text(rangeTxt, pageWidth - marginX, cursorY, { align: "right" });
+    cursorY += 14;
 
-    cursorY += 10;
+    doc.text(generatedTxt, pageWidth - marginX, cursorY, { align: "right" });
+    cursorY += 16;
 
-      const moneyCols = MONEY_COLS[subtitle] || new Set();
-      const columnStyles = {};
-      Array.from(moneyCols).forEach((colIdx) => {
-        columnStyles[colIdx] = { halign: "right" };
-      });
+    const moneyCols = MONEY_COLS[subtitle] || new Set();
+    const columnStyles = {};
+    Array.from(moneyCols).forEach((colIdx) => {
+      columnStyles[colIdx] = { halign: "right" };
+    });
 
-      const bodySafe = rowsForExport;
+    const bodySafe = rowsForExport;
 
-      /* ===== Footer for Sales Records (unchanged logic) ===== */
-      let footRows = undefined;
-      if (subtitle === "Sales Records") {
-        const completedRows = (sourceData || []).filter(
-          (r) =>
-            String(r?.paymentStatus || "").trim().toLowerCase() === "completed"
-        );
-        const totalCompleted = completedRows.reduce(
-          (s, r) => s + Number(r?.totalAmount ?? 0),
-          0
-        );
-        const COLS = headers.length;
-        const TARGET_COL = 10;
-        const COLSPAN = TARGET_COL;
-        const trailing = new Array(COLS - COLSPAN).fill("");
-        trailing[0] = {
-          content: peso(totalCompleted),
-          styles: {
-            fontStyle: "bold",
-            fontSize: 11,
-            halign: "right",
-            textColor: [33, 33, 33],
-          },
-        };
-        footRows = [
-          [
-            {
-              content: "TOTAL (Completed payments): ",
-              colSpan: COLSPAN,
-              styles: {
-                halign: "right",
-                fontStyle: "bold",
-                fontSize: 11,
-                textColor: [0, 0, 0],
-              },
-            },
-            ...trailing,
-          ],
-        ];
-      }
-
-      autoTable(doc, {
-        // first page = cursorY (~158) + 8; next pages use margin.top below
-        startY: cursorY + 8,
-        head: [headers],
-        body: bodySafe,
+    // ===== Sales Records footer (unchanged) =====
+    let footRows = undefined;
+    if (subtitle === "Sales Records") {
+      const completedRows = (sourceData || []).filter(
+        (r) =>
+          String(r?.paymentStatus || "").trim().toLowerCase() === "completed"
+      );
+      const totalCompleted = completedRows.reduce(
+        (s, r) => s + Number(r?.totalAmount ?? 0),
+        0
+      );
+      const COLS = headers.length;
+      const TARGET_COL = 10;
+      const COLSPAN = TARGET_COL;
+      const trailing = new Array(COLS - COLSPAN).fill("");
+      trailing[0] = {
+        content: peso(totalCompleted),
         styles: {
-          font: hasUnicode ? FONT_NAME : "helvetica",
-          fontSize: 9,
-          cellPadding: 4,
-          halign: "center",
-        },
-        headStyles: {
-          font: "helvetica",
-          fontSize: 10,
-          fillColor: [255, 210, 77],
+          fontStyle: "bold",
+          fontSize: 11,
+          halign: "right",
           textColor: [33, 33, 33],
         },
-        columnStyles,
-        foot: footRows,
-        footStyles: {
-          font: hasUnicode ? FONT_NAME : "helvetica",
-          fontStyle: "bold",
-          fillColor: [255, 248, 225],
-          textColor: [17, 24, 39],
-          halign: "right",
-        },
-        margin: {
-          top: otherPagesTop, // ✅ 2nd page and beyond: 72
-          bottom: marginBottom,
-          left: marginX,
-          right: marginX,
-        },
-        didDrawPage: () => {
-          const pageSizeInner = doc.internal.pageSize;
-          const pageHeightInner =
-            pageSizeInner.height || pageSizeInner.getHeight();
-          doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
-          doc.setFontSize(10);
-          doc.text(
-            `Page ${doc.getNumberOfPages()}`,
-            marginX,
-            pageHeightInner - marginBottom / 2
-          );
-        },
-      });
+      };
+      footRows = [
+        [
+          {
+            content: "TOTAL (Completed payments): ",
+            colSpan: COLSPAN,
+            styles: {
+              halign: "right",
+              fontStyle: "bold",
+              fontSize: 10,
+              textColor: [0, 0, 0],
+            },
+          },
+          ...trailing,
+        ],
+      ];
+    }
+    const isSales = subtitle === "Sales Records";
 
-      const safeName =
-        filename ||
-        `${String(subtitle || "")
-          .replace(/\s+/g, "_")
-          .toLowerCase()}_${rawFrom || "all"}_${rawTo || "all"}.pdf`;
-      doc.save(safeName);
-    },
-  }));
+    autoTable(doc, {
+      // first page = cursorY (~158) + header; next pages use margin.top below
+      startY: cursorY + 8,
+      head: [headers],
+      body: bodySafe,
+      styles: {
+    font: hasUnicode ? FONT_NAME : "helvetica",
+    fontSize: isSales ? 8 : 9,        // 👈 body font size: 8 for Sales, 9 for others
+    cellPadding: 4,
+    halign: "center",
+  },
+  headStyles: {
+    font: "helvetica",
+    fontSize: isSales ? 9 : 10,       // 👈 header font size: 9 for Sales, 10 for others
+    fillColor: [255, 210, 77],
+    textColor: [33, 33, 33],
+  },
+      columnStyles,
+      foot: footRows,
+      footStyles: {
+        font: hasUnicode ? FONT_NAME : "helvetica",
+        fontStyle: "bold",
+        fillColor: [255, 248, 225],
+        textColor: [17, 24, 39],
+        halign: "right",
+      },
+      margin: {
+        top: otherPagesTop,
+        bottom: marginBottom,
+        left: marginX,
+        right: marginX,
+      },
+      didDrawPage: () => {
+  const pageSizeInner = doc.internal.pageSize;
+  const pageWidthInner =
+    pageSizeInner.width || pageSizeInner.getWidth();
+  const pageHeightInner =
+    pageSizeInner.height || pageSizeInner.getHeight();
+
+  // 🔹 Footer area
+  const footerTopY = pageHeightInner - marginBottom + 16;
+  const pageLabelY = pageHeightInner - marginBottom / 2;
+
+  const iconSize = 12;
+  const iconTextGap = 6;
+  const groupGap = 24; // space between each icon+label group
+
+  doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+  doc.setFontSize(9);
+
+  const rowY = footerTopY;
+  let x = marginX;
+
+  // helper: draw one "icon + label" group horizontally
+  const drawIconLabel = (icon, label) => {
+    if (!label) return;
+
+    if (icon) {
+      doc.addImage(
+        icon,
+        "PNG",
+        x,
+        rowY - iconSize + 2,
+        iconSize,
+        iconSize
+      );
+    }
+
+    const textX = x + (icon ? iconSize + iconTextGap : 0);
+    doc.text(label, textX, rowY);
+
+    const textWidth = doc.getTextWidth(label);
+    const totalWidth =
+      (icon ? iconSize + iconTextGap : 0) + textWidth + groupGap;
+
+    x += totalWidth; // move x for next group
+  };
+
+  // 🔹 All icons + infos in ONE ROW
+  // drawIconLabel(coopIcon, `Coop: ${coopName}`);
+  drawIconLabel(adminIcon, `${adminName}`);
+  drawIconLabel(
+    addressIcon,
+    adminAddress ? `${adminAddress}` : ""
+  );
+  drawIconLabel(
+    phoneIcon,
+    adminContact ? `${adminContact}` : ""
+  );
+  // drawIconLabel(
+  //   emailIcon,
+  //   adminEmail ? `${adminEmail}` : ""
+  // );
+
+  // Page number on the right
+  doc.text(
+    `Page ${doc.getNumberOfPages()}`,
+    pageWidthInner - marginX,
+    pageLabelY,
+    { align: "right" }
+  );
+},
+
+    });
+
+    const safeName =
+      filename ||
+      `${String(subtitle || "")
+        .replace(/\s+/g, "_")
+        .toLowerCase()}_${rawFrom || "all"}_${rawTo || "all"}.pdf`;
+    doc.save(safeName);
+  },
+}));
 
   /* ======================== UI ======================== */
   return (
@@ -1115,7 +1267,7 @@ const ReportTable = forwardRef(function ReportTable(
                 </td>
                 <td className="px-3 py-2 text-center">
                   {typeof item.netToCoop === "number"
-                    ? peso(item.netToCoop)
+                    ? peso(item.netTof)
                     : item.netToCoop}
                 </td>
                 <td className="px-3 py-2 text-center">

@@ -79,10 +79,11 @@ export async function adminApprovePayout({
  * Returns the updated row (commonly includes t_processed_at inside RPC),
  * but we keep the signature generic and pass back the first row.
  */
-export async function adminRejectPayout({ payoutId }) {
+export async function adminRejectPayout({ payoutId, reason }) {
   if (payoutId == null) throw new Error("payoutId is required.");
   const { data, error } = await supabase.rpc("reject_payout", {
     p_payout_id: payoutId,
+    p_reason: reason ?? null,
   });
   if (error) throw error;
   return (data && data[0]) || null;
