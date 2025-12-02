@@ -62,6 +62,10 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
   const [selected, setSelected] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
+  // ❗ NEW: modal to tell user to select only 1 checkbox
+  const [onlyOneCheckboxModalOpen, setOnlyOneCheckboxModalOpen] =
+    useState(false);
+
   // data states
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -447,6 +451,9 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
     const openApprove = () => {
       if (selectedItems.length === 1) {
         setIsPayoutOpen(true);
+      } else {
+        // ❗ Show "check only 1 checkbox" modal
+        setOnlyOneCheckboxModalOpen(true);
       }
     };
     window.addEventListener("openRefundModal", openApprove);
@@ -460,7 +467,11 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
   // Reject: open confirmation only if EXACTLY ONE row is selected
   useEffect(() => {
     const handler = () => {
-      if (selectedItems.length !== 1) return;
+      if (selectedItems.length !== 1) {
+        // ❗ Show "check only 1 checkbox" modal
+        setOnlyOneCheckboxModalOpen(true);
+        return;
+      }
       const target = selectedItems[0];
       openRejectConfirm([target.payoutID]);
     };
@@ -988,6 +999,32 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
               className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
               {rejectBusy ? "Rejecting…" : "Yes, Reject"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ------- ONLY ONE CHECKBOX WARNING MODAL ------- */}
+      <Modal
+        isOpen={onlyOneCheckboxModalOpen}
+        onRequestClose={() => setOnlyOneCheckboxModalOpen(false)}
+        contentLabel="Selection Warning"
+        style={confirmModalStyle}
+      >
+        <div className="p-6">
+          <h2 className="text-xl font-extrabold text-gray-900">
+            Check only 1 checkbox
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Please select exactly one payout request by checking only one checkbox
+            before proceeding.
+          </p>
+          <div className="mt-6 flex items-center justify-end">
+            <button
+              onClick={() => setOnlyOneCheckboxModalOpen(false)}
+              className="px-4 py-2 rounded-lg bg-primaryYellow text-white font-semibold"
+            >
+              OK
             </button>
           </div>
         </div>

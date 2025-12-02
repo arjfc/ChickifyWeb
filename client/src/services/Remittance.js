@@ -57,3 +57,26 @@ export async function fetchAllRemittances() {
   }
   return data || [];
 }
+
+
+
+export async function fetchAdminRemittanceHistory(params = {}) {
+  const { dateFrom = null, dateTo = null } = params;
+
+  const { data, error } = await supabase.rpc(
+    "view_admin_remittance_historyy",
+    {
+      p_date_from: dateFrom || null, // "YYYY-MM-DD" or null
+      p_date_to: dateTo || null,
+      // backend forces auth.uid() as admin, this is just for signature
+      p_admin_id: null,
+    }
+  );
+
+  if (error) {
+    console.error("Error fetching admin remittance historyy:", error);
+    throw error;
+  }
+
+  return data || [];
+}
