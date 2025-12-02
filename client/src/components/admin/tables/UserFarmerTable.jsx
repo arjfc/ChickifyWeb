@@ -9,9 +9,6 @@ import { fetchFarmersForAdmin } from "@/services/FarmerRequests";
 export default function UserFarmerTable({ role, option, type, refreshTick }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  // REMOVED: checkbox/bulk-select state
-  // const [selected, setSelected] = useState([]);
-  // const [selectAll, setSelectAll] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -20,7 +17,8 @@ export default function UserFarmerTable({ role, option, type, refreshTick }) {
       setLoading(true);
       setError("");
       try {
-        // tweak the query based on UI filter "type"
+        // we still build "query" for compatibility, but
+        // fetchFarmersForAdmin now ignores these params
         let query = { status: "approved", onlyActive: true };
         if (type === "Inactive") query = { status: "approved", onlyActive: false };
         if (type === "Deactivated") query = { status: "suspended", onlyActive: false };
@@ -28,9 +26,6 @@ export default function UserFarmerTable({ role, option, type, refreshTick }) {
         const data = await fetchFarmersForAdmin(query);
         if (!mounted) return;
         setRows(data);
-        // REMOVED: initialize checkbox states
-        // setSelected(Array((data || []).length).fill(false));
-        // setSelectAll(false);
       } catch (e) {
         if (!mounted) return;
         setError(e.message || "Failed to load farmers.");
@@ -38,51 +33,43 @@ export default function UserFarmerTable({ role, option, type, refreshTick }) {
         if (mounted) setLoading(false);
       }
     })();
-    // refetch whenever filters or refresh token changes
   }, [role, option, type, refreshTick]);
 
-  // Optional: filter by UI "type" (Active/Inactive/Deactivated)
+  // Filter based on is_active coming from RPC
   const filtered = rows.filter((r) => {
     if (!type || type === "All") return true;
-    if (type === "Active") return r.status === "approved" && !r.ended_at;
-    if (type === "Inactive" || type === "Deactivated") return !!r.ended_at;
+    if (type === "Active") return r.is_active;
+    if (type === "Inactive" || type === "Deactivated") return !r.is_active;
     return true;
   });
 
-  // CHANGED: removed checkbox header column
   const headers = ["Full Name", "Email", "Status", "Actions"];
-
-  // REMOVED: per-row checkbox handler
-  // const handleCheckboxChange = (index) => {
-  //   const updated = [...selected];
-  //   updated[index] = !updated[index];
-  //   setSelected(updated);
-  //   setSelectAll(updated.every(Boolean));
-  // };
 
   if (loading) return <div className="p-6">Loading…</div>;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
-  if (!filtered.length) return <div className="p-6 text-gray-500">No farmers found.</div>;
+  if (!filtered.length)
+    return <div className="p-6 text-gray-500">No farmers found.</div>;
 
   return (
     <Table headers={headers}>
       {filtered.map((item, index) => (
         <tr key={item.id ?? index} className="bg-yellow-100 text-gray-700">
-          {/* CHANGED: removed checkbox cell */}
           <td className="px-4 py-3 text-center font-medium">{item.name}</td>
           <td className="px-4 py-3 text-center">{item.email}</td>
           <td
             className={`px-4 py-3 text-center font-medium ${
-              item.status === "approved" && !item.ended_at ? "text-green-600" : "text-red-500"
+              item.is_active ? "text-green-600" : "text-red-500"
             }`}
           >
-            {item.status === "approved" && !item.ended_at ? "Active" : "Inactive"}
+            {item.is_active ? "Active" : "Inactive"}
           </td>
           <td className="px-4 py-3 text-center">
             <div className="flex flex-row gap-3 justify-center items-center">
               <Link
                 to={`/${role}/users/view-users`}
-                state={{ user: { email: item.email, name: item.name, id: item.farmer_id } }}
+                state={{
+                  user: { email: item.email, name: item.name, id: item.farmer_id },
+                }}
                 className="flex items-center gap-2 bg-primaryYellow text-black px-4 py-2 rounded-lg hover:opacity-90 cursor-pointer"
               >
                 <FaRegEye />
@@ -91,7 +78,9 @@ export default function UserFarmerTable({ role, option, type, refreshTick }) {
 
               <Link
                 to={`/${role}/users/edit-users`}
-                state={{ user: { email: item.email, name: item.name, id: item.farmer_id } }}
+                state={{
+                  user: { email: item.email, name: item.name, id: item.farmer_id },
+                }}
                 className="flex items-center gap-2 bg-yellow-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-yellow-200 cursor-pointer"
               >
                 <FiEdit />
@@ -104,5 +93,112 @@ export default function UserFarmerTable({ role, option, type, refreshTick }) {
     </Table>
   );
 }
+
+// // src/components/admin/tables/UserFarmerTable.jsx
+// import React, { useEffect, useState } from "react";
+// import { FaRegEye } from "react-icons/fa";
+// import { FiEdit } from "react-icons/fi";
+// import Table from "../../Table";
+// import { Link } from "react-router-dom";
+// import { fetchFarmersForAdmin } from "@/services/FarmerRequests";
+
+// export default function UserFarmerTable({ role, option, type, refreshTick }) {
+//   const [rows, setRows] = useState([]);
+//   const [loading, setLoading] = useState(true);
+//   // REMOVED: checkbox/bulk-select state
+//   // const [selected, setSelected] = useState([]);
+//   // const [selectAll, setSelectAll] = useState(false);
+//   const [error, setError] = useState("");
+
+//   useEffect(() => {
+//     let mounted = true;
+//     (async () => {
+//       setLoading(true);
+//       setError("");
+//       try {
+//         // tweak the query based on UI filter "type"
+//         let query = { status: "approved", onlyActive: true };
+//         if (type === "Inactive") query = { status: "approved", onlyActive: false };
+//         if (type === "Deactivated") query = { status: "suspended", onlyActive: false };
+
+//         const data = await fetchFarmersForAdmin(query);
+//         if (!mounted) return;
+//         setRows(data);
+//         // REMOVED: initialize checkbox states
+//         // setSelected(Array((data || []).length).fill(false));
+//         // setSelectAll(false);
+//       } catch (e) {
+//         if (!mounted) return;
+//         setError(e.message || "Failed to load farmers.");
+//       } finally {
+//         if (mounted) setLoading(false);
+//       }
+//     })();
+//     // refetch whenever filters or refresh token changes
+//   }, [role, option, type, refreshTick]);
+
+//   // Optional: filter by UI "type" (Active/Inactive/Deactivated)
+//   const filtered = rows.filter((r) => {
+//     if (!type || type === "All") return true;
+//     if (type === "Active") return r.status === "approved" && !r.ended_at;
+//     if (type === "Inactive" || type === "Deactivated") return !!r.ended_at;
+//     return true;
+//   });
+
+//   // CHANGED: removed checkbox header column
+//   const headers = ["Full Name", "Email", "Status", "Actions"];
+
+//   // REMOVED: per-row checkbox handler
+//   // const handleCheckboxChange = (index) => {
+//   //   const updated = [...selected];
+//   //   updated[index] = !updated[index];
+//   //   setSelected(updated);
+//   //   setSelectAll(updated.every(Boolean));
+//   // };
+
+//   if (loading) return <div className="p-6">Loading…</div>;
+//   if (error) return <div className="p-6 text-red-600">{error}</div>;
+//   if (!filtered.length) return <div className="p-6 text-gray-500">No farmers found.</div>;
+
+//   return (
+//     <Table headers={headers}>
+//       {filtered.map((item, index) => (
+//         <tr key={item.id ?? index} className="bg-yellow-100 text-gray-700">
+//           {/* CHANGED: removed checkbox cell */}
+//           <td className="px-4 py-3 text-center font-medium">{item.name}</td>
+//           <td className="px-4 py-3 text-center">{item.email}</td>
+//           <td
+//             className={`px-4 py-3 text-center font-medium ${
+//               item.status === "approved" && !item.ended_at ? "text-green-600" : "text-red-500"
+//             }`}
+//           >
+//             {item.status === "approved" && !item.ended_at ? "Active" : "Inactive"}
+//           </td>
+//           <td className="px-4 py-3 text-center">
+//             <div className="flex flex-row gap-3 justify-center items-center">
+//               <Link
+//                 to={`/${role}/users/view-users`}
+//                 state={{ user: { email: item.email, name: item.name, id: item.farmer_id } }}
+//                 className="flex items-center gap-2 bg-primaryYellow text-black px-4 py-2 rounded-lg hover:opacity-90 cursor-pointer"
+//               >
+//                 <FaRegEye />
+//                 <span>View</span>
+//               </Link>
+
+//               <Link
+//                 to={`/${role}/users/edit-users`}
+//                 state={{ user: { email: item.email, name: item.name, id: item.farmer_id } }}
+//                 className="flex items-center gap-2 bg-yellow-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-yellow-200 cursor-pointer"
+//               >
+//                 <FiEdit />
+//                 <span>Edit</span>
+//               </Link>
+//             </div>
+//           </td>
+//         </tr>
+//       ))}
+//     </Table>
+//   );
+// }
 
 

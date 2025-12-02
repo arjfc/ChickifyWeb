@@ -1,5 +1,11 @@
 // components/admin/tables/PayoutReqTable.jsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import dayjs from "dayjs";
 import Table from "../../Table";
 import { FaCircleInfo } from "react-icons/fa6";
@@ -30,11 +36,23 @@ const baseModalStyle = {
 
 const detailsModalStyle = baseModalStyle;
 const approvePayoutModalStyle = {
-  content: { ...baseModalStyle.content, width: "720px", padding: 0, overflow: "auto", borderRadius: 24 },
+  content: {
+    ...baseModalStyle.content,
+    width: "720px",
+    padding: 0,
+    overflow: "auto",
+    borderRadius: 24,
+  },
   overlay: baseModalStyle.overlay,
 };
 const confirmModalStyle = {
-  content: { ...baseModalStyle.content, width: 480, padding: 0, overflow: "hidden", borderRadius: 20 },
+  content: {
+    ...baseModalStyle.content,
+    width: 480,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 20,
+  },
   overlay: baseModalStyle.overlay,
 };
 /* ---------------------------------- */
@@ -100,7 +118,7 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
     }
   };
 
-  // ===== DATE RANGE BACKEND (copied behavior) =====
+  // ===== DATE RANGE FILTER =====
   const inRange = useCallback((iso, range) => {
     if (!iso) return false;
     if (!range || range === "all") return true;
@@ -154,7 +172,10 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
   }, []);
   // ================================================
 
-  // Map RPC rows -> table shape (date-only processedAt)
+  const isRejectedTab =
+    String(selectedOption || "").toLowerCase() === "rejected";
+
+  // Map RPC rows -> table shape
   const mapped = useMemo(
     () =>
       rows.map((r) => ({
@@ -164,19 +185,23 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
         requestDate: mmddyy(r.request_date || r.requested_at),
 
         processedAtRaw: r.processed_at ?? null,
-        processedAt: r.processed_at ? mmddyy(r.processed_at) : null, // DATE ONLY
+        processedAt: r.processed_at ? mmddyy(r.processed_at) : null,
         processedBy: r.processed_by_name ?? r.processed_by ?? null,
 
         status: r.status || "Pending",
         gcashName: r.gcash_name ?? null,
         gcashNumber: r.gcash_number ?? null,
         proofImageUrl: r.img_url_signed ?? r.img_url ?? undefined,
+
+        // reason field from view
+        rejectReason: r.reason ?? r.reject_reason ?? null,
+
         __raw: r,
       })),
     [rows]
   );
 
-  // Tab + Date filters (date uses backend-style range logic)
+  // Tab + Date filters
   const payoutReqData = useMemo(() => {
     const byTab =
       selectedOption && selectedOption !== "All"
@@ -187,16 +212,31 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
           )
         : mapped;
 
-    const refDate = (c) => c.__raw?.request_date ?? c.__raw?.requested_at ?? null;
+    const refDate = (c) =>
+      c.__raw?.request_date ?? c.__raw?.requested_at ?? null;
     return byTab.filter((c) => inRange(refDate(c), date));
   }, [mapped, selectedOption, date, inRange]);
 
-  // 👉 If current tab is Pending, hide the "Processed At" column entirely
+  // show processed column only outside Pending tab
   const showProcessedColumn =
     String(selectedOption || "All").toLowerCase() !== "pending";
 
-  const headers = showProcessedColumn
-    ? [
+  const headers = (() => {
+    if (showProcessedColumn) {
+      if (isRejectedTab) {
+        return [
+          "Payout ID",
+          "Requestor (Farmer)",
+          "Amount",
+          "Request Date",
+          "Processed At",
+          "Status",
+          "Reason",
+          "Action",
+          "",
+        ];
+      }
+      return [
         "Payout ID",
         "Requestor (Farmer)",
         "Amount",
@@ -205,8 +245,9 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
         "Status",
         "Action",
         "",
-      ]
-    : [
+      ];
+    } else {
+      return [
         "Payout ID",
         "Requestor (Farmer)",
         "Amount",
@@ -215,6 +256,8 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
         "Action",
         "",
       ];
+    }
+  })();
 
   const handleCheckboxChange = (index) => {
     const item = payoutReqData[index];
@@ -283,123 +326,149 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
   const canConfirmPayout =
     !!payoutImageFile && !!payoutAmount && parseFloat(payoutAmount) > 0 && !isConfirming;
 
-  const confirmPayout = useCallback(async () => {
-    if (!canConfirmPayout) return;
-    setIsConfirming(true);
-    setActionError("");
-    try {
-      const target = selectedItems[0];
-      if (!target) throw new Error("No payout selected.");
-      const payoutId = target.payoutID;
+  const confirmPayout = useCallback(
+    async () => {
+      if (!canConfirmPayout) return;
+      setIsConfirming(true);
+      setActionError("");
+      try {
+        const target = selectedItems[0];
+        if (!target) throw new Error("No payout selected.");
+        const payoutId = target.payoutID;
 
-      const file = payoutImageFile;
-      const ext = (file?.name?.split(".").pop() || "jpg").toLowerCase();
-      const path = `proofs/${payoutId}_${Date.now()}.${ext}`;
+        const file = payoutImageFile;
+        const ext = (file?.name?.split(".").pop() || "jpg").toLowerCase();
+        const path = `proofs/${payoutId}_${Date.now()}.${ext}`;
 
-      const { error: upErr } = await supabase.storage
-        .from("payout-proofs")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (upErr) throw upErr;
+        const { error: upErr } = await supabase.storage
+          .from("payout-proofs")
+          .upload(path, file, { cacheControl: "3600", upsert: false });
+        if (upErr) throw upErr;
 
-      const { data: pub } = supabase.storage
-        .from("payout-proofs")
-        .getPublicUrl(path);
-      const proofUrl = pub?.publicUrl || null;
+        const { data: pub } = supabase.storage
+          .from("payout-proofs")
+          .getPublicUrl(path);
+        const proofUrl = pub?.publicUrl || null;
 
-      const memoParts = [];
-      if (payoutAmount) memoParts.push(`amount-entered=${payoutAmount}`);
-      if (gcashName) memoParts.push(`gcash_name=${gcashName}`);
-      if (gcashNumber) memoParts.push(`gcash_number=${gcashNumber}`);
-      const memo = memoParts.join(" | ") || null;
+        const memoParts = [];
+        if (payoutAmount) memoParts.push(`amount-entered=${payoutAmount}`);
+        if (gcashName) memoParts.push(`gcash_name=${gcashName}`);
+        if (gcashNumber) memoParts.push(`gcash_number=${gcashNumber}`);
+        const memo = memoParts.join(" | ") || null;
 
-      await adminApprovePayout({ payoutId, proofUrl, method: "GCash", memo });
+        await adminApprovePayout({ payoutId, proofUrl, method: "GCash", memo });
 
-      await loadRows();
-      setIsPayoutOpen(false);
-      resetApprovePayoutModal();
-    } catch (e) {
-      setActionError(e?.message || "Failed to approve payout.");
-    } finally {
-      setIsConfirming(false);
-    }
-  }, [
-    canConfirmPayout,
-    selectedItems,
-    payoutImageFile,
-    payoutAmount,
-    gcashName,
-    gcashNumber,
-    loadRows,
-    resetApprovePayoutModal,
-  ]);
+        await loadRows();
+        setIsPayoutOpen(false);
+        resetApprovePayoutModal();
+      } catch (e) {
+        setActionError(e?.message || "Failed to approve payout.");
+      } finally {
+        setIsConfirming(false);
+      }
+    },
+    [
+      canConfirmPayout,
+      selectedItems,
+      payoutImageFile,
+      payoutAmount,
+      gcashName,
+      gcashNumber,
+      loadRows,
+      resetApprovePayoutModal,
+    ]
+  );
 
   // ---------- Reject Confirmation Modal ----------
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [rejectIds, setRejectIds] = useState([]); // numbers
+  const [rejectIds, setRejectIds] = useState([]);
   const [rejectError, setRejectError] = useState("");
   const [rejectBusy, setRejectBusy] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   const openRejectConfirm = (ids) => {
     setRejectIds(ids);
     setRejectError("");
+    setRejectReason("");
     setRejectModalOpen(true);
   };
   const closeRejectConfirm = () => {
     setRejectModalOpen(false);
     setRejectIds([]);
     setRejectError("");
+    setRejectReason("");
   };
 
-  const confirmRejectNow = useCallback(async () => {
-    if (!rejectIds.length) return;
-    setRejectBusy(true);
-    setRejectError("");
-    try {
-      for (const id of rejectIds) await adminRejectPayout({ payoutId: id });
-      await loadRows();
-      setSelected(Array(payoutReqData.length).fill(false));
-      setSelectAll(false);
-      closeRejectConfirm();
-      if (isModalOpen) {
-        setIsModalOpen(false);
-        setModalData(null);
+  const confirmRejectNow = useCallback(
+    async () => {
+      if (!rejectIds.length) return;
+
+      if (!rejectReason.trim()) {
+        setRejectError("Please provide a reason for rejecting the payout.");
+        return;
       }
-    } catch (e) {
-      setRejectError(e?.message || "Failed to reject payout(s).");
-    } finally {
-      setRejectBusy(false);
-    }
-  }, [rejectIds, loadRows, payoutReqData.length, isModalOpen]);
 
-  // BULK/SINGLE REJECT (triggered by parent via custom event)
-  const rejectSelectedDirect = useCallback(async () => {
-    const targets = selectedItems;
-    if (!targets.length) return;
-    openRejectConfirm(targets.map((t) => t.payoutID));
-  }, [selectedItems]);
+      setRejectBusy(true);
+      setRejectError("");
+      try {
+        for (const id of rejectIds) {
+          await adminRejectPayout({
+            payoutId: id,
+            reason: rejectReason.trim(),
+          });
+        }
+        await loadRows();
+        setSelected(Array(payoutReqData.length).fill(false));
+        setSelectAll(false);
+        closeRejectConfirm();
+        if (isModalOpen) {
+          setIsModalOpen(false);
+          setModalData(null);
+        }
+      } catch (e) {
+        setRejectError(e?.message || "Failed to reject payout(s).");
+      } finally {
+        setRejectBusy(false);
+      }
+    },
+    [
+      rejectIds,
+      rejectReason,
+      loadRows,
+      payoutReqData.length,
+      isModalOpen,
+    ]
+  );
 
-  useEffect(() => {
-    const handler = () => {
-      void rejectSelectedDirect();
-    };
-    window.addEventListener("rejectPayoutDirect", handler);
-    return () => window.removeEventListener("rejectPayoutDirect", handler);
-  }, [rejectSelectedDirect]);
+  // ====== EVENTS FROM PARENT (approve / reject) ======
 
-  // Open Approve modal from parent event
+  // Approve: open modal only if EXACTLY ONE row is selected
   useEffect(() => {
     const openApprove = () => {
-      if (selectedItems.length > 0) setIsPayoutOpen(true);
+      if (selectedItems.length === 1) {
+        setIsPayoutOpen(true);
+      }
     };
-    window.addEventListener("openRefundModal", openApprove); // legacy
-    window.addEventListener("openPayoutModal", openApprove); // new
+    window.addEventListener("openRefundModal", openApprove);
+    window.addEventListener("openPayoutModal", openApprove);
     return () => {
       window.removeEventListener("openRefundModal", openApprove);
       window.removeEventListener("openPayoutModal", openApprove);
     };
-  }, [selectedItems.length]);
+  }, [selectedItems]);
 
-  // ✅ NEW: Auto-fill payout amount in the Approve Payout modal
+  // Reject: open confirmation only if EXACTLY ONE row is selected
+  useEffect(() => {
+    const handler = () => {
+      if (selectedItems.length !== 1) return;
+      const target = selectedItems[0];
+      openRejectConfirm([target.payoutID]);
+    };
+    window.addEventListener("rejectPayoutDirect", handler);
+    return () => window.removeEventListener("rejectPayoutDirect", handler);
+  }, [selectedItems]);
+
+  // Auto-fill payout amount when approve modal opens
   useEffect(() => {
     if (!isPayoutOpen) return;
     if (!selectedItems.length) return;
@@ -411,7 +480,6 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
         : Number(first.amount || 0);
 
     if (!Number.isNaN(amt) && amt > 0) {
-      // Only set if empty, so we don't override manual edits
       setPayoutAmount((prev) => (prev === "" ? String(amt) : prev));
     }
   }, [isPayoutOpen, selectedItems]);
@@ -474,7 +542,6 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
               </td>
               <td className="px-4 py-3 text-center">{item.requestDate}</td>
 
-              {/* Conditionally render the whole column based on tab */}
               {showProcessedColumn && (
                 <td className="px-4 py-3 text-center">
                   {showProcessedForRow ? item.processedAt || "—" : ""}
@@ -488,6 +555,12 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
               >
                 {statusLabel}
               </td>
+
+              {isRejectedTab && showProcessedColumn && (
+                <td className="px-4 py-3 text-center text-gray-700">
+                  {item.rejectReason || "—"}
+                </td>
+              )}
 
               <td
                 onClick={() => viewDetails(item)}
@@ -639,7 +712,6 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
                       </div>
                     </div>
 
-                    {/* Processed info (hidden entirely for Pending) */}
                     {showProcessedBlock && (
                       <div className="grid grid-cols-2 gap-8 border-t pt-4">
                         <div>
@@ -658,6 +730,18 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
                             {modalData.processedBy ?? "—"}
                           </p>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Reason for rejection (no extra line above) */}
+                    {rawStatus === "rejected" && (
+                      <div className="pt-4">
+                        <p className="font-bold text-primaryYellow">
+                          Reason for Rejection
+                        </p>
+                        <p className="text-gray-500 font-bold whitespace-pre-line">
+                          {modalData.rejectReason || "—"}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -868,6 +952,21 @@ export default function PayoutReqTable({ selectedOption, date = "all" }) {
               ))}
             </div>
           )}
+
+          {/* Reason for rejection */}
+          <div className="mt-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Reason for rejection <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder="Enter reason for rejecting this payout…"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-200"
+              disabled={rejectBusy}
+            />
+          </div>
 
           {!!rejectError && (
             <div className="mt-3 rounded-md bg-red-50 border border-red-200 p-2 text-sm font-semibold text-red-700">

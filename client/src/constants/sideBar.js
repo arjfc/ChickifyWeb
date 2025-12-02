@@ -3,24 +3,14 @@
 // Icons
 import { FiSettings } from "react-icons/fi";
 import { CiGrid42 } from "react-icons/ci";
-import {
-  LuUserCog,
-  LuClock2,
-  LuReceipt,
-  LuMessageCircleMore,
-} from "react-icons/lu";
+import { LuUserCog, LuClock2, LuReceipt, LuMessageCircleMore,LuStar} from "react-icons/lu";
 import { RiShoppingBag3Line } from "react-icons/ri";
 import { GrBasket } from "react-icons/gr";
 import { TbCoins } from "react-icons/tb";
 import { IoFolderOpenOutline } from "react-icons/io5";
 import { IoMdMegaphone } from "react-icons/io";
 
-/**
- * Sidebar configuration
- * role keys must match what your AuthContext exposes:
- *  - "super-admin"
- *  - "admin"
- */
+
 export const sidebarItems = [
   // Shared
   {
@@ -122,11 +112,11 @@ export const sidebarItems = [
   //     { label: "Expense", path: { admin: "/admin/expenses/expense" } },
   //   ],
   // },
-    {
-    label: "Expenses",
-    icon: TbCoins,
-    roles: ["admin"],
-    path: { admin: "/admin/expenses/expense" } },
+    // {
+    // label: "Expenses",
+    // icon: TbCoins,
+    // roles: ["admin"],
+    // path: { admin: "/admin/expenses/expense" } },
   
   {
     label: "Order Status",
@@ -152,6 +142,13 @@ export const sidebarItems = [
     icon: LuReceipt,
     roles: ["admin"],
   },
+  {
+    label: "Reviews",
+    path: { admin: "/admin/reviews" }, 
+    icon: LuStar,
+    roles: ["admin"],
+  },
+  
 
   // Shared
   {

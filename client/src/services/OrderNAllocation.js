@@ -290,11 +290,6 @@ export async function adminGetFullOrderDetails(orderId) {
   return (data && data[0]) || null;
 }
 
-
-
-
-
-
 export async function adminCreateAllocationBulk({
   orderId,
   sizeId,
@@ -355,7 +350,6 @@ export async function adminCreateAllocationByEggs({
 }
 
 
-
 // 
 // V I E W S
 // 
@@ -402,3 +396,131 @@ export async function listAllocationGroups({
     topAllocStatus: r.top_alloc_status || null,
   }));
 }
+
+// // ================= Email: order allocation =================
+
+// async function sendOrderAllocationEmail({
+//   to,
+//   name,
+//   orderId,
+//   totalEggs,
+//   totalTrays,
+// }) {
+//   if (!to) return; // silent no-op if no email
+
+//   const friendlyName = name || "Customer";
+//   const subject = `Your order #${orderId} has been allocated`;
+
+//   const html = `
+//     <p>Hi ${friendlyName},</p>
+//     <p>Your Chickify order <strong>#${orderId}</strong> has been allocated from available egg supply.</p>
+//     <p>
+//       <strong>Total trays:</strong> ${totalTrays ?? "N/A"}<br/>
+//       <strong>Total eggs:</strong> ${totalEggs ?? "N/A"}
+//     </p>
+//     <p>You can log in to the Chickify app to view the full allocation details and status.</p>
+//     <p>Thank you,<br/>Chickify Team</p>
+//   `;
+
+//   const text = `Hi ${friendlyName},
+
+// Your Chickify order #${orderId} has been allocated from available egg supply.
+// Total trays: ${totalTrays ?? "N/A"}
+// Total eggs: ${totalEggs ?? "N/A"}
+
+// You can log in to the Chickify app to view the full allocation details and status.
+
+// Thank you,
+// Chickify Team`;
+
+//   try {
+//     const { data, error } = await supabase.functions.invoke(
+//       "order-allocation-email",
+//       {
+//         body: { to, subject, html, text },
+//       }
+//     );
+
+//     if (error) {
+//       console.error("sendOrderAllocationEmail invoke error:", error);
+//     } else {
+//       console.log("Allocation email sent:", data);
+//     }
+//   } catch (err) {
+//     console.error("sendOrderAllocationEmail unexpected error:", err);
+//   }
+// }
+
+// // for future purposes 
+// export async function adminCreateAllocationBulk({
+//   orderId,
+//   sizeId,
+//   details,
+//   actorId = null,
+//   roleId = null,
+// } = {}) {
+//   if (!Array.isArray(details) || details.length === 0) {
+//     throw new Error("details must be a non-empty array");
+//   }
+
+//   // sanitize: keep only needed fields; coerce numbers; prefer eggs over trays per row
+//   const clean = details.map((d) => {
+//     const key = String(d.supply_row_key || d.supplyRowKey || "").trim();
+//     const eggs =
+//       d.eggs != null ? Math.max(0, Math.floor(Number(d.eggs))) : null;
+//     const trays =
+//       eggs == null && d.trays != null
+//         ? Math.max(0, Math.floor(Number(d.trays)))
+//         : null;
+
+//     if (!key) throw new Error("Each detail needs supply_row_key");
+//     if (eggs == null && trays == null) {
+//       throw new Error("Each detail needs eggs or trays");
+//     }
+
+//     const row = { supply_row_key: key };
+//     if (eggs != null) row.eggs = eggs;
+//     else row.trays = trays;
+
+//     return row;
+//   });
+
+//   const { data, error } = await supabase.rpc("admin_create_allocation_bulk", {
+//     p_order_id: orderId,
+//     p_size_id: sizeId,
+//     p_details: clean,   // [{ supply_row_key, eggs? | trays? }]
+//     p_actor_id: actorId,
+//     p_role_id: roleId,
+//   });
+
+//   if (error) throw error;
+
+//   // 🔔 After allocation, send email to buyer (best-effort, don't block)
+//   try {
+//     const full = await adminGetFullOrderDetails(orderId);
+
+//     const to = full?.buyer_email;
+//     const name =
+//       full?.buyer_name ||
+//       [full?.buyer_first, full?.buyer_middle, full?.buyer_last]
+//         .filter(Boolean)
+//         .join(" ") ||
+//       null;
+
+//     const totalEggs = data?.total_eggs ?? null;
+//     const totalTrays = data?.total_trays ?? null;
+
+//     await sendOrderAllocationEmail({
+//       to,
+//       name,
+//       orderId,
+//       totalEggs,
+//       totalTrays,
+//     });
+//   } catch (e) {
+//     console.error("Failed to send allocation email:", e);
+//     // do NOT throw – allocation already succeeded
+//   }
+
+//   return data; // { created_ids: [...], warning: null|string }
+// }

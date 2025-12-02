@@ -498,6 +498,8 @@ export default function DashboardLayout() {
     "/admin/reports": "Reports",
     "/admin/settings": "Account Settings",
     "/admin/price-forecast-analysis": "Price Forecast Analysis",
+    "/admin/reviews": "Reviews",
+
   };
 
   const excludedPaths = [
