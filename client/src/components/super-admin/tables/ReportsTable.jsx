@@ -252,7 +252,7 @@ const ReportsTable = forwardRef(function ReportsTable(
   };
 
   // ===== Expose export API =====
-  useImperativeHandle(ref, () => ({
+useImperativeHandle(ref, () => ({
   async exportPdf(meta = {}) {
     const {
       title = "Chickify Super Admin Reports",
@@ -317,6 +317,12 @@ const ReportsTable = forwardRef(function ReportsTable(
         ? `Date range: ${prettyFrom || "—"} to ${prettyTo || "—"}`
         : "Date range: All";
 
+    // 🔹 NEW: Generated on
+    const generatedNow = dayjs();
+    const generatedTxt = `Generated on: ${generatedNow.format(
+      "MMMM D, YYYY h:mm A"
+    )}`;
+
     // ===== HEADER =====
 
     // Title – centered
@@ -335,9 +341,15 @@ const ReportsTable = forwardRef(function ReportsTable(
     doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
     doc.setFontSize(11);
     doc.text(rangeTxt, pageWidth - marginX, cursorY, { align: "right" });
+    cursorY += 14;
 
-    // Extra space between date range and table
-    cursorY += 10;
+    // 🔹 Generated on – right aligned under date range
+    doc.text(generatedTxt, pageWidth - marginX, cursorY, {
+      align: "right",
+    });
+
+    // Extra space between header and table
+    cursorY += 16;
 
     // ===== Build table rows with proper formatting =====
     let bodyRaw;
@@ -373,21 +385,21 @@ const ReportsTable = forwardRef(function ReportsTable(
       body: bodySafe,
       styles: {
         font: hasUnicode ? FONT_NAME : "helvetica",
-        fontSize: 10,
+        fontSize: 9,
         cellPadding: 6,
         minCellHeight: 18,
         halign: "center",
       },
       headStyles: {
         font: "helvetica",
-        fontSize: 10,
+        fontSize: 9,
         fillColor: [255, 210, 77],
         textColor: [33, 33, 33],
       },
       columnStyles,
       margin: {
-        top: otherPagesTop,    // ✅ 2nd page and beyond: 72
-        bottom: marginBottom,  // 72
+        top: otherPagesTop, // ✅ 2nd page and beyond: 72
+        bottom: marginBottom, // 72
         left: marginX,
         right: marginX,
       },
@@ -413,6 +425,7 @@ const ReportsTable = forwardRef(function ReportsTable(
     doc.save(safeName);
   },
 }));
+
 
   // ===== Render (UI unchanged) =====
   return (
