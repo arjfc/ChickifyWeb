@@ -112,11 +112,11 @@ export const sidebarItems = [
   //     { label: "Expense", path: { admin: "/admin/expenses/expense" } },
   //   ],
   // },
-    {
-    label: "Expenses",
-    icon: TbCoins,
-    roles: ["admin"],
-    path: { admin: "/admin/expenses/expense" } },
+    // {
+    // label: "Expenses",
+    // icon: TbCoins,
+    // roles: ["admin"],
+    // path: { admin: "/admin/expenses/expense" } },
   
   {
     label: "Order Status",
