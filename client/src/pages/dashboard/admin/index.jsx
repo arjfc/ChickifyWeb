@@ -263,7 +263,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-base font-semibold text-gray-800">
-              Gross Earnings (Before Fees)
+              Gross Income 
             </h3>
             <div className="text-right">
               <div className="text-xs text-gray-500">Total this month</div>
@@ -285,7 +285,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-base font-semibold text-gray-800">
-              Net Earnings (After Fees)
+              Net Income 
             </h3>
             <div className="text-right">
               <div className="text-xs text-gray-500">Total this month</div>
