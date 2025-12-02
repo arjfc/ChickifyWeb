@@ -168,47 +168,132 @@ export async function getOrderSizeRequirements(orderId) {
   return result;
 }
 
-export async function adminMarkOrderToShip(orderId, { actorId = null, roleId = null } = {}) {
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+export async function adminMarkOrderToShip(
+  orderId,
+  { actorId = null, roleId = null } = {}
+) {
+  const oid = Number(orderId);
+  if (!oid) throw new Error("Invalid orderId");
+
   const { error } = await supabase.rpc("admin_mark_order_to_ship", {
-    p_order_id: orderId,
+    p_order_id: oid,
     p_actor_id: actorId,
     p_role_id: roleId,
   });
-  if (error) throw error;
+
+  if (error) {
+    throw new Error(formatSupabaseError(error));
+  }
+
+  return { ok: true };
 }
 
 /* -------------------------------------------------------------------------- */
-/* NEW: Delivered action — uses confirm_delivery_admin RPC                    */
+/* Shipped -> Delivered                                                       */
+/*  confirm_delivery_admin (fees + trucking + ledger)                         */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Marks an order as Delivered and triggers all downstream postings
- * handled by SQL (fees, batches, farmer earnings with source_id, etc.).
+ * Marks a single order as Delivered.
+ * - Calls confirm_delivery_admin(p_order_id, p_tracking_profile_id)
  */
-// replace your adminMarkOrderDelivered with this version
-function formatSupabaseError(error) {
-  if (!error) return "Unknown error";
-  const parts = [error.message, error.details, error.hint].filter(Boolean);
-  return parts.join(" — ");
-}
-export async function adminMarkOrderDelivered(orderId) {
+export async function adminMarkOrderDelivered(
+  orderId,
+  { trackingProfileId = null } = {}
+) {
   const oid = Number(orderId);
   if (!oid) throw new Error("Invalid orderId");
-  const { data, error } = await supabase.rpc("confirm_delivery_admin", { p_order_id: oid });
-  if (error) throw new Error(formatSupabaseError(error));
+
+  console.log("[Deliver] confirm_delivery_admin call", {
+    orderId: oid,
+    trackingProfileId,
+  });
+
+  const { data, error } = await supabase.rpc("confirm_delivery_admin", {
+    p_order_id: oid,
+    p_tracking_profile_id: trackingProfileId ?? null,
+  });
+
+  if (error) {
+    console.error("[Deliver] confirm_delivery_admin ERROR", error);
+    throw new Error(formatSupabaseError(error));
+  }
+
+  console.log("[Deliver] confirm_delivery_admin OK", {
+    orderId: oid,
+    trackingProfileId,
+    result: data,
+  });
+
+  // confirm_delivery_admin returns boolean
   return { ok: !!data };
 }
 
-// NEW: detailed batch helper used by the UI to surface each failure
-export async function adminMarkManyDeliveredDetailed(orderIds = []) {
+/**
+ * Batch helper used by the UI.
+ * Pass the selected driver once and it will be used for all orders.
+ */
+export async function adminMarkManyDeliveredDetailed(
+  orderIds = [],
+  { trackingProfileId = null } = {}
+) {
   const ids = (orderIds || []).map((x) => Number(x)).filter(Boolean);
-  const results = await Promise.allSettled(ids.map((id) => adminMarkOrderDelivered(id)));
-  return results.map((r, i) => {
-    if (r.status === "fulfilled") return { orderId: ids[i], ok: true, error: null };
-    const reason = r.reason instanceof Error ? r.reason.message : String(r.reason || "Unknown error");
-    return { orderId: ids[i], ok: false, error: reason };
+
+  console.log("[Deliver] Starting batch delivery", {
+    orderIds: ids,
+    trackingProfileId,
+  });
+
+  const settled = await Promise.allSettled(
+    ids.map((id) =>
+      adminMarkOrderDelivered(id, {
+        trackingProfileId,
+      })
+    )
+  );
+
+  return settled.map((r, index) => {
+    const orderId = ids[index];
+
+    if (r.status === "fulfilled") {
+      return { orderId, ok: true, error: null };
+    }
+
+    const reason =
+      r.reason instanceof Error
+        ? r.reason.message
+        : String(r.reason || "Unknown error");
+
+    return { orderId, ok: false, error: reason };
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Full order details                                                         */
+/* -------------------------------------------------------------------------- */
+
+export async function adminGetFullOrderDetails(orderId) {
+  const oid = Number(orderId);
+  if (!oid) throw new Error("Invalid orderId");
+
+  const { data, error } = await supabase.rpc("get_admin_order_details", {
+    p_order_id: oid,
+  });
+
+  if (error) throw new Error(formatSupabaseError(error));
+
+  // RPC returns a SETOF; we only need the first row
+  return (data && data[0]) || null;
+}
+
+
+
+
+
 
 export async function adminCreateAllocationBulk({
   orderId,

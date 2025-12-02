@@ -1,3 +1,4 @@
+// pages/admin/products/ProductDetails.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../../../components/Card";
 import { IoFilterOutline } from "react-icons/io5";
@@ -13,9 +14,12 @@ import {
   listMyProducts,
   upsertProduct,
   uploadProductImage,
+  fetchCoopBasePrices,
+  upsertCoopBasePrice,
 } from "@/services/Products";
 
 import { getMyUserProfile, hasProfileAddress } from "@/services/Profile";
+
 
 /* ---------- Small toast helper ---------- */
 function Toast({ toast, onClose }) {
@@ -92,7 +96,7 @@ const modalStyle2 = {
   },
 };
 
-// Static base price guide (just a visual reference for admins)
+// Static base price guide (still just visual / fallback)
 const basePriceSizes = [
   { size: "Extra Large", id: "xl", number: 220 },
   { size: "Large", id: "lg", number: 200 },
@@ -123,6 +127,8 @@ export default function ProductDetails() {
     prod_price_per_tray: "",
     prod_status: "active",
     prod_img: "",
+    min_bundle_trays: 5,
+    max_bundle_trays: 100,
   });
 
   const [previewUrl, setPreviewUrl] = useState("");
@@ -132,11 +138,23 @@ export default function ProductDetails() {
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const handleInfoModal = () => setIsInfoModalOpen((s) => !s);
 
+  // coop base price data (from RPC)
+  const [coopBasePrices, setCoopBasePrices] = useState([]);
+
+  // edit base price modal state
+  const [editBasePriceState, setEditBasePriceState] = useState({
+    open: false,
+    sizeId: null,
+    sizeLabel: "",
+    globalPrice: null,
+  });
+  const [editBasePriceValue, setEditBasePriceValue] = useState("");
+  const [savingBasePrice, setSavingBasePrice] = useState(false);
+
   // toast state
   const [toast, setToast] = useState(null);
   const notify = (message, type = "warning", title = "Action needed") => {
     setToast({ message, type, title });
-    // auto close after 4.5s
     window.clearTimeout(notify._t);
     notify._t = window.setTimeout(() => setToast(null), 4500);
   };
@@ -147,17 +165,37 @@ export default function ProductDetails() {
     if (!f.prod_name?.trim()) errors.push("• Product name is required.");
     if (!f.p_categ_id) errors.push("• Category is required.");
     if (!f.size_id) errors.push("• Size is required.");
+
     const price = Number(f.prod_price_per_tray);
     if (!Number.isFinite(price) || price <= 0)
       errors.push("• Price / Tray must be a positive number.");
+
     if (!["active", "inactive"].includes(String(f.prod_status)))
       errors.push("• Status must be active or inactive.");
+
+    const minTrays = Number(f.min_bundle_trays);
+    const maxTrays = Number(f.max_bundle_trays);
+
+    if (!Number.isFinite(minTrays) || minTrays <= 0) {
+      errors.push("• Minimum trays per order must be a positive number.");
+    }
+    if (!Number.isFinite(maxTrays) || maxTrays <= 0) {
+      errors.push("• Maximum trays per order must be a positive number.");
+    }
+    if (
+      Number.isFinite(minTrays) &&
+      Number.isFinite(maxTrays) &&
+      minTrays > maxTrays
+    ) {
+      errors.push("• Minimum trays cannot be greater than maximum trays.");
+    }
+
     return errors;
   }
 
   async function refreshProfile() {
     try {
-      const p = await getMyUserProfile(); // uses RPC (joined to address)
+      const p = await getMyUserProfile();
       setProfile(p);
       return p;
     } catch (e) {
@@ -166,7 +204,7 @@ export default function ProductDetails() {
     }
   }
 
-  /* ---------- initial data ---------- */
+  /* ---------- initial dropdown data ---------- */
   useEffect(() => {
     (async () => {
       const [cats, sz] = await Promise.all([listCategories(), listSizes()]);
@@ -182,7 +220,6 @@ export default function ProductDetails() {
     refreshProfile();
   }, []);
 
-  // Re-check profile when returning from Settings tab/page
   useEffect(() => {
     const onVis = async () => {
       if (document.visibilityState === "visible") {
@@ -196,7 +233,22 @@ export default function ProductDetails() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  /* ---------- data list ---------- */
+  /* ---------- coop base price list ---------- */
+  async function reloadCoopBasePrices() {
+    try {
+      const rows = await fetchCoopBasePrices();
+      setCoopBasePrices(rows);
+    } catch (e) {
+      console.error("coop_list_baseprice error:", e);
+      notify(e.message || "Failed to load base prices", "error", "Error");
+    }
+  }
+
+  useEffect(() => {
+    reloadCoopBasePrices();
+  }, []);
+
+  /* ---------- product list ---------- */
   async function reloadList() {
     try {
       setLoading(true);
@@ -223,7 +275,6 @@ export default function ProductDetails() {
 
   /* ---------- UI handlers ---------- */
   const onClickAdd = async () => {
-    // keep button interactive – just notify if address is incomplete
     const p = await refreshProfile();
     if (!hasProfileAddress(p)) {
       notify(
@@ -242,6 +293,8 @@ export default function ProductDetails() {
       prod_price_per_tray: "",
       prod_status: "active",
       prod_img: "",
+      min_bundle_trays: 5,
+      max_bundle_trays: 100,
     });
     setPreviewUrl("");
     setIsModalOpen(true);
@@ -258,13 +311,14 @@ export default function ProductDetails() {
       prod_price_per_tray: product.prod_price_per_tray,
       prod_status: product.prod_status,
       prod_img: product.prod_img || "",
+      min_bundle_trays: product.min_bundle_trays ?? 5,
+      max_bundle_trays: product.max_bundle_trays ?? 100,
     });
     setPreviewUrl(product.prod_img || "");
     setIsModalOpen(true);
   };
 
   async function onSave() {
-    // defense-in-depth: block save if address incomplete
     const p = profile ?? (await refreshProfile());
     if (!hasProfileAddress(p)) {
       notify(
@@ -285,6 +339,8 @@ export default function ProductDetails() {
         p_categ_id: Number(form.p_categ_id),
         size_id: Number(form.size_id),
         prod_price_per_tray: Number(form.prod_price_per_tray),
+        min_bundle_trays: Number(form.min_bundle_trays),
+        max_bundle_trays: Number(form.max_bundle_trays),
       });
       setIsModalOpen(false);
       await reloadList();
@@ -300,9 +356,35 @@ export default function ProductDetails() {
     [current]
   );
 
+  /* ---------- Save coop base price ---------- */
+  async function onSaveBasePrice(e) {
+    e.preventDefault();
+    const value = Number(editBasePriceValue);
+    if (!Number.isFinite(value) || value <= 0) {
+      notify(
+        "Please enter a valid positive price per tray.",
+        "warning",
+        "Invalid value"
+      );
+      return;
+    }
+
+    try {
+      setSavingBasePrice(true);
+      await upsertCoopBasePrice(editBasePriceState.sizeId, value);
+      notify("Base price updated.", "success", "Saved");
+      setEditBasePriceState((s) => ({ ...s, open: false }));
+      await reloadCoopBasePrices();
+    } catch (err) {
+      console.error("coop_upsert_baseprice error:", err);
+      notify(err.message || "Failed to update base price", "error", "Error");
+    } finally {
+      setSavingBasePrice(false);
+    }
+  }
+
   return (
     <>
-      {/* Toast */}
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -361,7 +443,6 @@ export default function ProductDetails() {
                 )}
               </div>
 
-              {/* FILTER */}
               <div className="flex items-center gap-3">
                 <select
                   value={selectedCategoryId ?? ""}
@@ -390,13 +471,13 @@ export default function ProductDetails() {
           </Card>
         </div>
 
-        {/* CURRENT BASE PRICE CARD (guide) */}
+        {/* CURRENT BASE PRICE CARD (guide + coop override) */}
         <div className="col-span-2">
           <div className="flex flex-col gap-3 p-4 rounded-lg border border-gray-200 shadow-lg">
             <div className="flex flex-row justify-between items-center">
               <div className="flex flex-row gap-2 items-center">
                 <h1 className="text-lg md:text-xl text-primaryYellow font-semibold">
-                  Current Base Price of Tray
+                  Current Base Price of Tray (This Coop)
                 </h1>
                 <FaCircleInfo
                   onClick={handleInfoModal}
@@ -406,16 +487,74 @@ export default function ProductDetails() {
               </div>
             </div>
 
+            {/* NEW: dynamic coop base prices */}
             <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
-              {basePriceSizes.map((data) => (
-                <SmallCard
-                  size={data.size}
-                  id={data.id}
-                  key={data.id}
-                  number={data.number}
-                />
-              ))}
+              {coopBasePrices.map((row) => {
+                const effective =
+                  row.coop_price_per_tray ??
+                  row.global_price_per_tray ??
+                  0;
+
+                return (
+                  <div
+                    key={row.size_id}
+                    className="flex flex-col rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+                  >
+                    <div className="text-sm font-semibold text-gray-700">
+                      {row.size_description}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {row.eggs_per_tray} eggs / tray
+                    </div>
+
+                    <div className="mt-2 text-xs text-gray-500">
+                      Global base:{" "}
+                      {row.global_price_per_tray != null
+                        ? `₱${Number(
+                            row.global_price_per_tray
+                          ).toFixed(2)}`
+                        : "—"}
+                    </div>
+
+                    <div className="mt-1 text-sm font-bold text-primaryYellow">
+                      Coop price: ₱{Number(effective).toFixed(2)}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditBasePriceState({
+                          open: true,
+                          sizeId: row.size_id,
+                          sizeLabel: row.size_description,
+                          globalPrice: row.global_price_per_tray,
+                        });
+                        setEditBasePriceValue(
+                          String(
+                            row.coop_price_per_tray ??
+                              row.global_price_per_tray ??
+                              ""
+                          )
+                        );
+                      }}
+                      className="mt-3 text-xs px-2 py-1 rounded-md border border-primaryYellow text-primaryYellow hover:bg-primaryYellow hover:text-white"
+                    >
+                      Edit price
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* if RPC returns nothing yet */}
+              {coopBasePrices.length === 0 && (
+                <div className="col-span-full text-sm text-gray-400">
+                  No sizes found. Check your <code>size</code> table.
+                </div>
+              )}
             </div>
+
+         
+         
           </div>
         </div>
 
@@ -449,7 +588,7 @@ export default function ProductDetails() {
 
             {/* Row 1: Image + Category + Size */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {/* Upload Product Image (with preview) */}
+              {/* Upload Product Image */}
               <div className="w-full">
                 <label
                   className="relative block w-full border rounded-lg shadow-md bg-gray-50"
@@ -475,18 +614,20 @@ export default function ProductDetails() {
                       const f = e.target.files?.[0];
                       if (!f) return;
 
-                      // 1) instant preview
                       const local = URL.createObjectURL(f);
                       setPreviewUrl(local);
 
                       try {
-                        // 2) upload and store PUBLIC URL
                         setIsUploading(true);
                         const publicUrl = await uploadProductImage(f);
                         setForm((v) => ({ ...v, prod_img: publicUrl }));
                       } catch (err) {
                         console.error("upload error:", err);
-                        notify(err.message || "Upload failed", "error", "Error");
+                        notify(
+                          err.message || "Upload failed",
+                          "error",
+                          "Error"
+                        );
                         setPreviewUrl("");
                       } finally {
                         setIsUploading(false);
@@ -627,6 +768,53 @@ export default function ProductDetails() {
               </div>
             </div>
 
+            {/* Min / Max bundles (trays) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="flex flex-col">
+                <label className="mb-2 font-bold text-gray-400">
+                  Minimum Order (trays)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.min_bundle_trays}
+                  onChange={(e) =>
+                    setForm((v) => ({
+                      ...v,
+                      min_bundle_trays: e.target.value,
+                    }))
+                  }
+                  className="border rounded-lg p-3 text-gray-600 shadow-md"
+                  placeholder="e.g., 5"
+                />
+                <span className="mt-1 text-xs text-gray-400">
+                  Example: 5 trays ≈ 150 eggs if 1 tray = 30 eggs
+                </span>
+              </div>
+
+              <div className="flex flex-col">
+                <label className="mb-2 font-bold text-gray-400">
+                  Maximum Order (trays)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.max_bundle_trays}
+                  onChange={(e) =>
+                    setForm((v) => ({
+                      ...v,
+                      max_bundle_trays: e.target.value,
+                    }))
+                  }
+                  className="border rounded-lg p-3 text-gray-600 shadow-md"
+                  placeholder="e.g., 100"
+                />
+                <span className="mt-1 text-xs text-gray-400">
+                  Must be greater than or equal to minimum trays.
+                </span>
+              </div>
+            </div>
+
             {/* Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-5">
               <button
@@ -676,6 +864,80 @@ export default function ProductDetails() {
               <p className="text-lg">Okay</p>
             </div>
           </div>
+        </Modal>
+
+        {/* EDIT BASE PRICE MODAL */}
+        <Modal
+          isOpen={editBasePriceState.open}
+          onRequestClose={() =>
+            setEditBasePriceState((s) => ({ ...s, open: false }))
+          }
+          style={modalBaseStyle}
+          ariaHideApp={false}
+        >
+          <form
+            onSubmit={onSaveBasePrice}
+            className="flex flex-col gap-4 p-4 sm:p-6"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-lg font-bold text-primaryYellow">
+                Edit Base Price – {editBasePriceState.sizeLabel}
+              </h2>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditBasePriceState((s) => ({ ...s, open: false }))
+                }
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Global base price:{" "}
+              {editBasePriceState.globalPrice != null
+                ? `₱${Number(editBasePriceState.globalPrice).toFixed(2)}`
+                : "—"}
+            </p>
+
+            <div className="flex flex-col">
+              <label className="mb-1 text-sm font-medium">
+                Coop price per tray (₱)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editBasePriceValue}
+                onChange={(e) => setEditBasePriceValue(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-gray-700"
+                required
+              />
+              <span className="mt-1 text-xs text-gray-400">
+                This price is used for this coop only. It does not change the
+                global base price.
+              </span>
+            </div>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setEditBasePriceState((s) => ({ ...s, open: false }))
+                }
+                className="flex-1 rounded-lg border py-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingBasePrice}
+                className="flex-1 rounded-lg bg-primaryYellow py-2 font-semibold text-white disabled:opacity-60"
+              >
+                {savingBasePrice ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
         </Modal>
       </div>
     </>

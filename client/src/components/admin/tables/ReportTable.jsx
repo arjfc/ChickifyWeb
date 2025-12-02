@@ -20,7 +20,7 @@ import {
   fetchTransactionsByAdmin,
   fetchFeesCollectedByAdmin,
 } from "@/services/TransactionLogs";
-import { fetchAdminRemittanceHistory } from "@/services/Remittance"; // ⬅️ NEW
+import { fetchAdminRemittanceHistoryy } from "@/services/Remittance"; // ⬅️ NEW
 
 // pdf libs
 import jsPDF from "jspdf";
@@ -487,11 +487,13 @@ const ReportTable = forwardRef(function ReportTable(
         if (!alive) return;
         const safe = Array.isArray(rows) ? rows : [];
         const mapped = safe.map((r) => ({
-          fullName: r.full_name || r.name || "—",
-          address: r.address || "—",
-          contactNo: r.contact_no || r.phone || "—",
-          gcashNo: r.gcash_no || r.gcashNo || "—",
-        }));
+  fullName: r.full_name || r.name || "—",
+  address: r.address || "—",
+  contactNo: r.contact_no || r.phone || "—",
+  email: r.email || "—",
+  status: r.farmer_status || r.status || "—",
+}));
+
         setFarmersRows(mapped);
       } catch (e) {
         console.error(
@@ -518,7 +520,7 @@ const ReportTable = forwardRef(function ReportTable(
     (async () => {
       try {
         setRemitLoading(true);
-        const rows = await fetchAdminRemittanceHistory({
+        const rows = await fetchAdminRemittanceHistoryy({
           dateFrom: dateFrom || null,
           dateTo: dateTo || null,
         });
@@ -601,7 +603,14 @@ const ReportTable = forwardRef(function ReportTable(
       "Notes",
       "Created",
     ],
-    "List of Farmers": ["Full Name", "Address", "Contact No.", "GCash No."],
+    // ⬇️ UPDATED: Added Email + Status
+    "List of Farmers": [
+      "Full Name",
+      "Address",
+      "Contact No.",
+      "Email",
+      "Status",
+    ],
     // ⬇️ NEW
     "Fees Collected": [
       "Transaction ID",
@@ -701,16 +710,17 @@ const ReportTable = forwardRef(function ReportTable(
             ]
           : eggRows;
       case "List of Farmers":
-        return farmersLoading
-          ? [
-              {
-                fullName: "Loading…",
-                address: "",
-                contactNo: "",
-                gcashNo: "",
-              },
-            ]
-          : farmersRows;
+  return farmersLoading
+    ? [
+        {
+          fullName: "Loading…",
+          address: "",
+          contactNo: "",
+          email: "",
+          status: "",
+        },
+      ]
+    : farmersRows;
       case "Fees Collected":
         return feesLoading
           ? [
@@ -852,7 +862,13 @@ const ReportTable = forwardRef(function ReportTable(
             item.created,
           ];
         case "List of Farmers":
-          return [item.fullName, item.address, item.contactNo, item.gcashNo];
+          return [
+            item.fullName,
+            item.address,
+            item.contactNo,
+            item.email,
+            item.status,
+          ];
         case "Fees Collected":
           return [
             item.transactionID,
@@ -1413,19 +1429,30 @@ const ReportTable = forwardRef(function ReportTable(
               </>
             )}
 
-            {/* List of Farmers */}
-            {selectedOption === "List of Farmers" && (
-              <>
-                <td className="px-3 py-2 text-center font-medium">
-                  {item.fullName}
-                </td>
-                <td className="px-3 py-2 text-center">{item.address}</td>
-                <td className="px-3 py-2 text-center">
-                  {item.contactNo}
-                </td>
-                <td className="px-3 py-2 text-center">{item.gcashNo}</td>
-              </>
-            )}
+           {selectedOption === "List of Farmers" && (
+  <>
+    <td className="px-3 py-2 text-center font-medium">
+      {item.fullName}
+    </td>
+    <td className="px-3 py-2 text-center">{item.address}</td>
+    <td className="px-3 py-2 text-center">
+      {item.contactNo}
+    </td>
+    <td className="px-3 py-2 text-center">{item.email}</td>
+    <td
+      className={`px-3 py-2 text-center font-medium ${
+        (item.status || "").toLowerCase() === "active"
+          ? "text-green-600"
+          : (item.status || "").toLowerCase() === "inactive"
+          ? "text-red-600"
+          : "text-gray-700"
+      }`}
+    >
+      {item.status}
+    </td>
+  </>
+)}
+
 
             {/* Fees Collected */}
             {selectedOption === "Fees Collected" && (

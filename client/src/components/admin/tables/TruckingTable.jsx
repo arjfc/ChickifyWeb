@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+// src/components/admin/tables/TruckingTable.jsx
+import React, { useMemo, useState, useEffect } from "react";
 
 /**
- * Expected row shape (you can adjust to your actual API):
+ * Expected row shape from fetchTruckingProfiles():
  * {
  *   tracking_profile_id: number;
  *   name: string;
@@ -9,21 +10,64 @@ import React, { useMemo, useState } from "react";
  *   truck_number: string;
  *   phone_number?: string | null;
  *   plate_number: string;
+ *   capacity?: number | null;
+ *   time_window?: string | null;
  *   is_active: boolean;
- *   schedule?: string | Date | null;     // from tracking_allocation.schedule
- *   nextSchedule?: string | Date | null; // from tracking_profile
+ *   weekly_schedule?: string[]; // ['monday','wednesday']
+ *   weekly_schedule_label?: string;
  * }
+ *
+ * Props:
+ * - rows: driver rows
+ * - onAddDriver: () => void
+ * - onSelectionChange: (ids: number[]) => void
+ * - shippingMode: 'pickup' | 'delivery' | string   // 👈 NEW
  */
 export default function TruckingTable({
   rows = [],
   onAddDriver,
   onSelectionChange,
+  shippingMode = "delivery", // default
 }) {
   const [companyFilter, setCompanyFilter] = useState("all");
+  const [scheduleDayFilter, setScheduleDayFilter] = useState("all");
   const [searchName, setSearchName] = useState("");
-  const [scheduleFrom, setScheduleFrom] = useState("");
-  const [scheduleTo, setScheduleTo] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+
+  const isPickupMode = (shippingMode || "").toLowerCase() === "pickup";
+
+  // If mode switches to pickup, clear any selected drivers
+  useEffect(() => {
+    if (isPickupMode && selectedIds.length > 0) {
+      setSelectedIds([]);
+      onSelectionChange?.([]);
+    }
+  }, [isPickupMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Today (0=Sun..6=Sat) → "sunday".."saturday"
+  const todayKey = useMemo(() => {
+    const jsDay = new Date().getDay();
+    const map = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    return map[jsDay];
+  }, []);
+
+  const WEEK_DAYS = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ];
 
   // Unique company list for filter
   const companies = useMemo(() => {
@@ -34,34 +78,27 @@ export default function TruckingTable({
     return Array.from(set);
   }, [rows]);
 
-  // Helpers
-  const toDateOnly = (value) => {
-    if (!value) return null;
-    const d = value instanceof Date ? value : new Date(value);
-    return isNaN(d.getTime()) ? null : d;
-  };
-
-  const formatDateTime = (value) => {
-    const d = toDateOnly(value);
-    if (!d) return "—";
-    return d.toLocaleString();
-  };
-
-  const formatScheduleDate = (value) => {
-    const d = toDateOnly(value);
-    if (!d) return "—";
-    return d.toLocaleString();
+  const isDriverAvailableToday = (row) => {
+    const days = (row.weekly_schedule || []).map((d) =>
+      String(d || "").toLowerCase()
+    );
+    return days.includes(todayKey);
   };
 
   // Filter logic
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
-      // Company filter
       if (companyFilter !== "all" && row.company_name !== companyFilter) {
         return false;
       }
 
-      // Name search (case-insensitive)
+      if (scheduleDayFilter !== "all") {
+        const days = (row.weekly_schedule || []).map((d) =>
+          String(d || "").toLowerCase()
+        );
+        if (!days.includes(scheduleDayFilter)) return false;
+      }
+
       if (
         searchName.trim() &&
         !row.name.toLowerCase().includes(searchName.trim().toLowerCase())
@@ -69,42 +106,27 @@ export default function TruckingTable({
         return false;
       }
 
-      // Schedule date range filter (if provided)
-      if (scheduleFrom || scheduleTo) {
-        // use schedule first, then fall back to nextSchedule
-        const sched = toDateOnly(row.schedule ?? row.nextSchedule);
-        if (!sched) return false;
-
-        if (scheduleFrom) {
-          const from = new Date(scheduleFrom);
-          from.setHours(0, 0, 0, 0);
-          if (sched < from) return false;
-        }
-
-        if (scheduleTo) {
-          const to = new Date(scheduleTo);
-          to.setHours(23, 59, 59, 999);
-          if (sched > to) return false;
-        }
-      }
-
       return true;
     });
-  }, [rows, companyFilter, searchName, scheduleFrom, scheduleTo]);
+  }, [rows, companyFilter, scheduleDayFilter, searchName]);
 
-  // Selection logic
-  const allVisibleIds = filteredRows.map((r) => r.tracking_profile_id);
+  // Selection logic – only drivers scheduled today are selectable,
+  // and only when NOT pickup mode.
+  const allVisibleIds = filteredRows
+    .filter((row) => !isPickupMode && isDriverAvailableToday(row))
+    .map((r) => r.tracking_profile_id);
+
   const isAllSelected =
     allVisibleIds.length > 0 &&
     allVisibleIds.every((id) => selectedIds.includes(id));
 
   const toggleAll = () => {
+    if (isPickupMode) return; // selection disabled on pickup
+
     let newSelected;
     if (isAllSelected) {
-      // Remove all visible
       newSelected = selectedIds.filter((id) => !allVisibleIds.includes(id));
     } else {
-      // Add all visible
       const set = new Set(selectedIds);
       allVisibleIds.forEach((id) => set.add(id));
       newSelected = Array.from(set);
@@ -113,7 +135,10 @@ export default function TruckingTable({
     onSelectionChange?.(newSelected);
   };
 
-  const toggleOne = (id) => {
+  const toggleOne = (id, row) => {
+    if (isPickupMode) return; // selection disabled on pickup
+    if (!isDriverAvailableToday(row)) return;
+
     let newSelected;
     if (selectedIds.includes(id)) {
       newSelected = selectedIds.filter((x) => x !== id);
@@ -122,6 +147,22 @@ export default function TruckingTable({
     }
     setSelectedIds(newSelected);
     onSelectionChange?.(newSelected);
+  };
+
+  const renderWeeklySchedule = (row) => {
+    if (row.weekly_schedule_label) return row.weekly_schedule_label;
+
+    const arr = row.weekly_schedule || [];
+    if (!arr.length) return "No schedule set";
+
+    return arr
+      .map((d) => {
+        const s = String(d || "").trim().toLowerCase();
+        if (!s) return "";
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      })
+      .filter(Boolean)
+      .join(", ");
   };
 
   return (
@@ -140,6 +181,20 @@ export default function TruckingTable({
           + Add driver
         </button>
       </div>
+
+      {/* Hint */}
+      {isPickupMode ? (
+        <p className="text-xs text-red-500">
+          This order is set to <span className="font-semibold">pickup</span>.
+          Trucking drivers cannot be assigned.
+        </p>
+      ) : (
+        <p className="text-xs text-gray-500">
+          Only drivers whose schedule includes{" "}
+          <span className="font-semibold capitalize">{todayKey}</span> can be
+          selected for trucking today.
+        </p>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
@@ -162,26 +217,23 @@ export default function TruckingTable({
           </select>
         </div>
 
-        {/* Schedule filter (date range) */}
+        {/* Schedule day filter */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-600">
-            Schedule (date range)
+            Filter by schedule day
           </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-              value={scheduleFrom}
-              onChange={(e) => setScheduleFrom(e.target.value)}
-            />
-            <span className="text-xs text-gray-500">to</span>
-            <input
-              type="date"
-              className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-              value={scheduleTo}
-              onChange={(e) => setScheduleTo(e.target.value)}
-            />
-          </div>
+          <select
+            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm min-w-[150px]"
+            value={scheduleDayFilter}
+            onChange={(e) => setScheduleDayFilter(e.target.value)}
+          >
+            <option value="all">All days</option>
+            {WEEK_DAYS.map((d) => (
+              <option key={d} value={d}>
+                {d.charAt(0).toUpperCase() + d.slice(1)}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Search by driver name */}
@@ -191,7 +243,7 @@ export default function TruckingTable({
           </label>
           <input
             type="text"
-            placeholder="Type driver name…"
+            placeholder="Type driver name..."
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-full"
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
@@ -205,24 +257,23 @@ export default function TruckingTable({
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="px-3 py-2">
-                {/* Uncomment if you want a "select all" checkbox */}
-                {/* <input
+                <input
                   type="checkbox"
                   className="h-4 w-4 accent-yellow-400"
                   checked={isAllSelected}
                   onChange={toggleAll}
-                /> */}
+                  disabled={allVisibleIds.length === 0 || isPickupMode}
+                  title={
+                    isPickupMode
+                      ? "Pickup order: trucking selection disabled."
+                      : ""
+                  }
+                />
               </th>
-              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
-                Schedule
-              </th>
-              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
-                Next Schedule
-              </th>
-              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
+              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-left">
                 Driver Name
               </th>
-              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
+              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-left">
                 Company
               </th>
               <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
@@ -235,6 +286,15 @@ export default function TruckingTable({
                 Plate Number
               </th>
               <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
+                Capacity
+              </th>
+              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
+                Time Window
+              </th>
+              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
+                Weekly Schedule
+              </th>
+              <th className="px-3 py-2 font-semibold text-xs text-gray-700 uppercase tracking-wide text-center">
                 Status
               </th>
             </tr>
@@ -244,7 +304,7 @@ export default function TruckingTable({
             {filteredRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="px-3 py-6 text-center text-sm text-gray-500"
                 >
                   No drivers found with the current filters.
@@ -254,13 +314,16 @@ export default function TruckingTable({
               filteredRows.map((row) => {
                 const id = row.tracking_profile_id;
                 const selected = selectedIds.includes(id);
+                const availableToday = isDriverAvailableToday(row);
 
                 return (
                   <tr
                     key={id}
                     className={
                       "border-b border-gray-100 transition-colors " +
-                      (selected ? "bg-yellow-50" : "hover:bg-[#FFF8D6]")
+                      (selected
+                        ? "bg-yellow-50"
+                        : "hover:bg-[#FFF8D6] bg-white")
                     }
                   >
                     <td className="px-3 py-4 align-middle text-center">
@@ -268,23 +331,25 @@ export default function TruckingTable({
                         type="checkbox"
                         className="h-4 w-4 accent-yellow-400"
                         checked={selected}
-                        onChange={() => toggleOne(id)}
+                        disabled={
+                          isPickupMode || !availableToday
+                        }
+                        title={
+                          isPickupMode
+                            ? "Pickup order: trucking selection disabled."
+                            : availableToday
+                            ? ""
+                            : "Driver not scheduled today. Cannot pick."
+                        }
+                        onChange={() => toggleOne(id, row)}
                       />
                     </td>
 
-                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
-                      {formatScheduleDate(row.schedule)}
-                    </td>
-
-                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
-                      {formatScheduleDate(row.nextSchedule)}
-                    </td>
-
-                    <td className="px-3 py-4 align-middle text-gray-900 text-center">
+                    <td className="px-3 py-4 align-middle text-gray-900 text-left">
                       {row.name}
                     </td>
 
-                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
+                    <td className="px-3 py-4 align-middle text-gray-700 text-left">
                       {row.company_name}
                     </td>
 
@@ -298,6 +363,20 @@ export default function TruckingTable({
 
                     <td className="px-3 py-4 align-middle text-gray-700 text-center">
                       {row.plate_number}
+                    </td>
+
+                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
+                      {row.capacity != null && row.capacity !== ""
+                        ? row.capacity
+                        : "—"}
+                    </td>
+
+                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
+                      {row.time_window || "—"}
+                    </td>
+
+                    <td className="px-3 py-4 align-middle text-gray-700 text-center">
+                      {renderWeeklySchedule(row)}
                     </td>
 
                     <td className="px-3 py-4 align-middle text-center">
@@ -316,7 +395,6 @@ export default function TruckingTable({
               })
             )}
           </tbody>
-
         </table>
       </div>
     </div>

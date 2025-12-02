@@ -1,185 +1,480 @@
-import React, { useState } from "react";
+// pages/admin/messages/Messages.jsx
+import React, { useEffect, useState } from "react";
 import { FaUserCircle } from "react-icons/fa";
 import { VscSend } from "react-icons/vsc";
 import { GiPaperClip } from "react-icons/gi";
 
-export default function Messages() {
-  // Dummy conversations
-  const [conversations, setConversations] = useState([
-    {
-      id: 1,
-      name: "Buyer A. Name",
-      avatar: "https://placekitten.com/50/50",
-      online: true,
-      messages: [
-        {
-          id: 1,
-          sender: "other",
-          text: "Hello I have a question regarding chuhuuc",
-          time: "12:00 PM",
-        },
-        {
-          id: 2,
-          sender: "me",
-          text: "So what kabayong budlat",
-          time: "12:01 PM",
-        },
-        {
-          id: 3,
-          sender: "other",
-          text: "Bruh, don't ignore my question 😂",
-          time: "12:02 PM",
-        },
-        {
-          id: 4,
-          sender: "me",
-          text: "HAHA sorry, what's up?",
-          time: "12:03 PM",
-        },
-      ],
-    },
-    {
-      id: 2,
-      name: "Buyer B. Name",
-      avatar: "https://placekitten.com/51/51",
-      online: false,
-      messages: [
-        {
-          id: 1,
-          sender: "other",
-          text: "Is this still available?",
-          time: "9:30 AM",
-        },
-        { id: 2, sender: "me", text: "Yes it is 👍", time: "9:31 AM" },
-      ],
-    },
-  ]);
+import {
+  getMyThreads,
+  getMessagesForThread,
+  markThreadRead,
+  sendChatMessage,
+  startThreadWith,
+  listFarmerRecipients,
+  listBuyerRecipients,
+} from "@/services/Messages";
+import { supabase } from "@/lib/supabase";
 
-  // Active conversation state
-  const [activeConv, setActiveConv] = useState(conversations[0]);
+function formatTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleString([], {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function Messages() {
+  const [myUserId, setMyUserId] = useState(null);
+  const [threads, setThreads] = useState([]);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadsError, setThreadsError] = useState(null);
+
+  const [activeThreadId, setActiveThreadId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+
   const [newMessage, setNewMessage] = useState("");
 
-  const handleSend = () => {
-    if (!newMessage.trim()) return;
+  // recipient modals
+  const [openFarmerModal, setOpenFarmerModal] = useState(false);
+  const [openBuyerModal, setOpenBuyerModal] = useState(false);
+  const [farmerList, setFarmerList] = useState([]);
+  const [buyerList, setBuyerList] = useState([]);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
 
-    const updatedConv = {
-      ...activeConv,
-      messages: [
-        ...activeConv.messages,
+  /* ---------------------------------------------------------------------- */
+  /* Load threads on mount                                                 */
+  /* ---------------------------------------------------------------------- */
+  async function reloadThreads(selectFirst = false) {
+    setThreadsLoading(true);
+    setThreadsError(null);
+    try {
+      const { userId, threads } = await getMyThreads();
+      setMyUserId(userId);
+      setThreads(threads || []);
+
+      if (selectFirst && threads.length > 0) {
+        const firstId = threads[0].thread_id;
+        setActiveThreadId(firstId);
+        await loadMessages(firstId);
+      }
+    } catch (err) {
+      console.error("Failed to load threads:", err);
+      setThreadsError(err.message || "Failed to load conversations.");
+    } finally {
+      setThreadsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    reloadThreads(true);
+  }, []);
+
+  /* ---------------------------------------------------------------------- */
+  /* Load messages for a thread                                            */
+  /* ---------------------------------------------------------------------- */
+  async function loadMessages(threadId) {
+    if (!threadId) return;
+    setMessagesLoading(true);
+    try {
+      const rows = await getMessagesForThread(threadId);
+      setMessages(rows || []);
+      await markThreadRead(threadId);
+      // refresh threads so unread_count updates
+      reloadThreads(false);
+    } catch (err) {
+      console.error("Failed to load messages:", err);
+    } finally {
+      setMessagesLoading(false);
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Realtime subscription for active thread                               */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    if (!activeThreadId) return;
+
+    const channel = supabase
+      .channel(`admin-thread-${activeThreadId}`)
+      .on(
+        "postgres_changes",
         {
-          id: activeConv.messages.length + 1,
-          sender: "me",
-          text: newMessage,
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
+          event: "INSERT",
+          schema: "public",
+          table: "message",
+          filter: `thread_id=eq.${activeThreadId}`,
         },
-      ],
+        (payload) => {
+          const row = payload.new;
+
+          setMessages((prev) => {
+            // avoid duplicates
+            if (prev.some((m) => m.message_id === row.message_id)) return prev;
+
+            const next = [...prev, row];
+            next.sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            );
+            return next;
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log("[Realtime admin messages] status:", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
     };
+  }, [activeThreadId]);
 
-    setConversations((prev) =>
-      prev.map((conv) => (conv.id === activeConv.id ? updatedConv : conv))
-    );
+  /* ---------------------------------------------------------------------- */
+  /* Send message                                                           */
+  /* ---------------------------------------------------------------------- */
+  async function handleSend() {
+    const text = newMessage.trim();
+    if (!text || !activeThreadId) return;
 
-    setActiveConv(updatedConv);
-    setNewMessage("");
-  };
+    try {
+      // optimistic local append
+      const temp = {
+        message_id: `temp-${Date.now()}`,
+        sender_id: myUserId,
+        body: text,
+        is_read: true,
+        created_at: new Date().toISOString(),
+        file_url: null,
+      };
+      setMessages((prev) => [...prev, temp]);
+      setNewMessage("");
+
+      await sendChatMessage({
+        threadId: activeThreadId,
+        body: text,
+      });
+
+      // The realtime subscription will bring in the real row.
+      // We can optionally refetch to be 100% canonical:
+      // await loadMessages(activeThreadId);
+    } catch (err) {
+      console.error("Send message failed:", err);
+      alert(err.message || "Failed to send message.");
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Open farmer / buyer modal                                             */
+  /* ---------------------------------------------------------------------- */
+  async function openFarmerPicker() {
+    setOpenFarmerModal(true);
+    if (farmerList.length) return; // already loaded
+
+    setRecipientsLoading(true);
+    try {
+      const rows = await listFarmerRecipients();
+      const mapped = (rows || []).map((r) => ({
+        userId: r.user_id,
+        name: r.full_name || r.email || "Farmer",
+        email: r.email || "",
+        role: r.role_name,
+      }));
+      setFarmerList(mapped);
+    } catch (err) {
+      console.error("Failed to load farmers:", err);
+      alert(err.message || "Failed to load farmers.");
+    } finally {
+      setRecipientsLoading(false);
+    }
+  }
+
+  async function openBuyerPicker() {
+    setOpenBuyerModal(true);
+    if (buyerList.length) return;
+
+    setRecipientsLoading(true);
+    try {
+      const rows = await listBuyerRecipients();
+      const mapped = (rows || []).map((r) => ({
+        userId: r.user_id,
+        name: r.full_name || r.email || "Buyer",
+        email: r.email || "",
+        role: r.role_name,
+      }));
+      setBuyerList(mapped);
+    } catch (err) {
+      console.error("Failed to load buyers:", err);
+      alert(err.message || "Failed to load buyers.");
+    } finally {
+      setRecipientsLoading(false);
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* When you click a farmer/buyer in modal                                */
+  /* ---------------------------------------------------------------------- */
+  async function handlePickRecipient(recipient) {
+    try {
+      const thread = await startThreadWith(recipient.userId);
+      if (!thread) {
+        alert("Failed to start conversation.");
+        return;
+      }
+
+      await reloadThreads(false);
+
+      const id = thread.thread_id;
+      setActiveThreadId(id);
+      await loadMessages(id);
+
+      setOpenFarmerModal(false);
+      setOpenBuyerModal(false);
+    } catch (err) {
+      console.error("Failed to start thread:", err);
+      alert(err.message || "Failed to start conversation.");
+    }
+  }
+
+  const activeThread =
+    threads.find((t) => t.thread_id === activeThreadId) || null;
+
+  /* ---------------------------------------------------------------------- */
+  /* UI                                                                     */
+  /* ---------------------------------------------------------------------- */
 
   return (
     <div className="flex h-screen bg-gray-100 gap-2">
       {/* Sidebar */}
-      <div className="w-1/4 border-r bg-white overflow-y-auto p-6 rounded-lg border border-gray-200 shadow-lg">
-        {conversations.map((conv) => {
-          const lastMsg = conv.messages[conv.messages.length - 1];
-          return (
-            <div
-              key={conv.id}
-              onClick={() => setActiveConv(conv)}
-              className={`flex items-center mb-4 cursor-pointer p-2 rounded-lg ${
-                activeConv.id === conv.id
-                  ? "bg-yellow-100"
-                  : "hover:bg-gray-100"
-              }`}
-            >
-              <FaUserCircle className="w-10 h-10 rounded-full mr-3" />
-              {/* <img src={conv.avatar} alt="avatar" className="w-10 h-10 rounded-full mr-3" /> */}
-              <div>
-                <p className="font-bold text-lg text-primaryYellow">
-                  {conv.name}
-                </p>
-                <p className="text-base text-gray-400 truncate w-40">
-                  {lastMsg.text}
-                </p>
+      <div className="w-1/4 border-r bg-white overflow-y-auto p-6 rounded-lg border border-gray-200 shadow-lg flex flex-col gap-4">
+        {/* Top buttons: Message Farmer / Buyer */}
+        <div className="flex gap-2 mb-2">
+          <button
+            onClick={openFarmerPicker}
+            className="flex-1 bg-primaryYellow text-white text-sm font-semibold rounded-lg px-3 py-2 hover:opacity-90"
+          >
+            Message Farmer
+          </button>
+          <button
+            onClick={openBuyerPicker}
+            className="flex-1 bg-yellow-200 text-primaryYellow text-sm font-semibold rounded-lg px-3 py-2 hover:bg-yellow-300"
+          >
+            Message Buyer
+          </button>
+        </div>
+
+        {threadsLoading && (
+          <p className="text-sm text-gray-500">Loading conversations…</p>
+        )}
+        {threadsError && (
+          <p className="text-sm text-red-600">{threadsError}</p>
+        )}
+        {!threadsLoading && !threadsError && threads.length === 0 && (
+          <p className="text-sm text-gray-400">
+            No conversations yet. Start one by messaging a farmer or buyer.
+          </p>
+        )}
+
+        {!threadsLoading &&
+          !threadsError &&
+          threads.map((conv) => {
+            const active = conv.thread_id === activeThreadId;
+            const last = conv.last_message || "";
+            const unread = Number(conv.unread_count || 0) > 0;
+
+            return (
+              <div
+                key={conv.thread_id}
+                onClick={async () => {
+                  setActiveThreadId(conv.thread_id);
+                  await loadMessages(conv.thread_id);
+                }}
+                className={`flex items-center mb-3 cursor-pointer p-2 rounded-lg transition ${
+                  active ? "bg-yellow-100" : "hover:bg-gray-100"
+                }`}
+              >
+                <FaUserCircle className="w-10 h-10 rounded-full mr-3 text-gray-400" />
+                <div className="flex-1">
+                  <p className="font-bold text-base text-primaryYellow">
+                    {conv.partner_name || "Conversation"}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate w-40">
+                    {last}
+                  </p>
+                </div>
+                {unread && (
+                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primaryYellow text-white text-xs">
+                    {conv.unread_count}
+                  </span>
+                )}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
 
       {/* Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-3 p-4 drop-shadow-custom border-b bg-white rounded-tr-lg rounded-tl-lg border border-gray-200">
-          <FaUserCircle className="w-10 h-10 rounded-full mr-3" />
-          {/* <img src={activeConv.avatar} alt="avatar" className="w-10 h-10 rounded-full" /> */}
+          <FaUserCircle className="w-10 h-10 rounded-full mr-3 text-gray-400" />
           <div>
-            <p className="font-semibold text-lg">{activeConv.name}</p>
-            <p
-              className={`text-base ${
-                activeConv.online ? "text-yellow-500" : "text-gray-500"
-              }`}
-            >
-              {activeConv.online ? "Online" : "Offline"}
+            <p className="font-semibold text-lg">
+              {activeThread?.partner_name || "Select a conversation"}
             </p>
+            {activeThread ? (
+              <p className="text-xs text-gray-500">
+                Last message:{" "}
+                {activeThread.last_time
+                  ? formatDateTime(activeThread.last_time)
+                  : "—"}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400">
+                Choose a thread on the left or start a new message.
+              </p>
+            )}
           </div>
         </div>
 
         {/* Messages */}
         <div className="flex-1 p-6 space-y-4 overflow-y-auto bg-yellow-50">
-          {activeConv.messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex items-center gap-3 ${
-                msg.sender === "me" ? "justify-end" : "justify-start"
-              }`}
-            >
-                {msg.sender != "me" && <FaUserCircle className="w-10 h-10 rounded-full mr-3" />}
-              <div
-                className={`px-4 py-2 rounded-2xl max-w-xs ${
-                  msg.sender === "me"
-                    ? "bg-yellow-400 text-black rounded-br-none"
-                    : "bg-gray-200 text-black rounded-bl-none"
-                }`}
-              >
-                <p>{msg.text}</p>
-                <span className="text-xs text-gray-600 block mt-1">
-                  {msg.time}
-                </span>
-              </div>
-                {msg.sender === "me" && <FaUserCircle className="w-10 h-10 rounded-full mr-3" />}
-
-            </div>
-          ))}
+          {messagesLoading && (
+            <p className="text-sm text-gray-500">Loading messages…</p>
+          )}
+          {!messagesLoading && !activeThread && (
+            <p className="text-sm text-gray-400">
+              No conversation selected yet.
+            </p>
+          )}
+          {!messagesLoading &&
+            activeThread &&
+            messages.map((msg) => {
+              const mine = msg.sender_id === myUserId;
+              return (
+                <div
+                  key={msg.message_id}
+                  className={`flex items-center gap-3 ${
+                    mine ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  {!mine && (
+                    <FaUserCircle className="w-10 h-10 rounded-full mr-3 text-gray-400" />
+                  )}
+                  <div
+                    className={`px-4 py-2 rounded-2xl max-w-xs ${
+                      mine
+                        ? "bg-yellow-400 text-black rounded-br-none"
+                        : "bg-gray-200 text-black rounded-bl-none"
+                    }`}
+                  >
+                    <p className="text-sm">{msg.body}</p>
+                    <span className="text-[10px] text-gray-600 block mt-1 text-right">
+                      {formatTime(msg.created_at)}
+                    </span>
+                  </div>
+                  {mine && (
+                    <FaUserCircle className="w-10 h-10 rounded-full mr-3 text-gray-400" />
+                  )}
+                </div>
+              );
+            })}
         </div>
 
         {/* Input */}
-        <div className="p-4 drop-shadow-custom flex items-center justify-between bg-white rounded-br-lg rounded-bl-lg">
+        <div className="p-4 drop-shadow-custom flex items-center justify-between bg-white rounded-br-lg rounded-bl-lg border border-gray-200">
           <GiPaperClip className="text-2xl text-gray-400 cursor-pointer" />
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type your message"
-            className="flex-1 rounded-full px-4 py-2 outline-none"
+            placeholder={
+              activeThread ? "Type your message" : "Select a conversation first"
+            }
+            className="flex-1 rounded-full px-4 py-2 outline-none mx-3 bg-gray-100 text-sm"
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            disabled={!activeThread}
           />
           <VscSend
             onClick={handleSend}
-            className="text-3xl text-primaryYellow cursor-pointer"
+            className={`text-3xl cursor-pointer ${
+              activeThread
+                ? "text-primaryYellow"
+                : "text-gray-300 cursor-not-allowed"
+            }`}
           />
         </div>
       </div>
+
+      {/* Farmer / Buyer selection modal */}
+      {(openFarmerModal || openBuyerModal) && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h2 className="font-semibold text-lg text-gray-700">
+                {openFarmerModal ? "Message Farmer" : "Message Buyer"}
+              </h2>
+              <button
+                onClick={() => {
+                  setOpenFarmerModal(false);
+                  setOpenBuyerModal(false);
+                }}
+                className="text-gray-400 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {recipientsLoading && (
+                <p className="text-sm text-gray-500">Loading recipients…</p>
+              )}
+
+              {!recipientsLoading &&
+                (openFarmerModal ? farmerList : buyerList).map((r) => (
+                  <button
+                    key={r.userId}
+                    onClick={() => handlePickRecipient(r)}
+                    className="w-full text-left px-4 py-3 border rounded-lg hover:bg-yellow-50 flex flex-col"
+                  >
+                    <span className="font-semibold text-sm text-gray-800">
+                      {r.name}
+                    </span>
+                    <span className="text-xs text-gray-500">{r.email}</span>
+                  </button>
+                ))}
+
+              {!recipientsLoading &&
+                (openFarmerModal ? farmerList : buyerList).length === 0 && (
+                  <p className="text-sm text-gray-400">
+                    No recipients found for this role.
+                  </p>
+                )}
+            </div>
+
+            <div className="border-t px-4 py-3 flex justify-end">
+              <button
+                onClick={() => {
+                  setOpenFarmerModal(false);
+                  setOpenBuyerModal(false);
+                }}
+                className="px-4 py-2 text-sm rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

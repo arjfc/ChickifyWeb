@@ -60,7 +60,7 @@ export async function fetchAllRemittances() {
 
 
 
-export async function fetchAdminRemittanceHistory(params = {}) {
+export async function fetchAdminRemittanceHistoryy(params = {}) {
   const { dateFrom = null, dateTo = null } = params;
 
   const { data, error } = await supabase.rpc(
@@ -75,6 +75,51 @@ export async function fetchAdminRemittanceHistory(params = {}) {
 
   if (error) {
     console.error("Error fetching admin remittance historyy:", error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+
+/* Small helper to normalize dates → "YYYY-MM-DD" */
+const toYMD = (d) => {
+  if (!d) return null;
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10); // "YYYY-MM-DD"
+};
+
+/**
+ * Super Admin: view remittance history of admins → superadmin.
+ *
+ * @param {Object} params
+ * @param {string|Date|null} [params.dateFrom] - inclusive start date
+ * @param {string|Date|null} [params.dateTo]   - inclusive end date
+ * @param {string|null} [params.adminId]       - UUID of specific admin (optional)
+ *
+ * @returns {Promise<Array>} rows with:
+ *   remittance_date, coop_name, admin_name, total_remitted,
+ *   payment_method, gcash_name, gcash_number, remitted_to
+ */
+export async function fetchAdminRemittanceHistory(params = {}) {
+  const {
+    dateFrom = null,
+    dateTo = null,
+    adminId = null,
+  } = params;
+
+  const { data, error } = await supabase.rpc(
+    "view_admin_remittance_history",
+    {
+      p_date_from: toYMD(dateFrom),
+      p_date_to: toYMD(dateTo),
+      p_admin_id: adminId || null,
+    }
+  );
+
+  if (error) {
+    console.error("view_admin_remittance_history error:", error);
     throw error;
   }
 

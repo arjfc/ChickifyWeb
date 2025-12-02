@@ -239,7 +239,7 @@ function DateRangePopover({ open, onClose, value, onChange }) {
 
 /* ======================== Page ======================== */
 export default function Reports() {
-  const options = ["Platform", "Transaction", "Service", "List of Coops", "List of Buyers"];
+  const options = ["Platform", "Transaction", "Service", "List of Coops", "List of Buyers", "Remittance Reports"];
   const [selectedOption, setSelectedOption] = useState(options[0]);
 
   // backend-facing YYYY-MM-DD

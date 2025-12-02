@@ -1,166 +1,16 @@
-// import React, { useState } from "react";
-// import { FaRegEye } from "react-icons/fa";
-// import { FiEdit } from "react-icons/fi";
-// import Table from "./Table";
-// import { Link } from "react-router-dom";
-
-// export default function UserTable({ role, option, type }) {
-//   const [selected, setSelected] = useState([]);
-//   const [selectAll, setSelectAll] = useState(false);
-
-//   const users = [
-//     {
-//       firstName: "Maria",
-//       lastName: "Lopez",
-//       sex: "female",
-//       phoneNumber: "12345678911",
-//       address: "Sample Add Bantayan Island",
-//       farmName: "Alexandria Farm",
-//       farmLoc: "Alexandria Bantayan Island",
-//       username: "testname",
-//       email: "admin@gmail.com",
-//       role: "Farmer",
-//       status: "Active",
-//     },
-//     {
-//       firstName: "Juan",
-//       lastName: "Dela Cruz",
-//       sex: "male",
-//       phoneNumber: "9876543210",
-//       address: "Sample Add Bantayan Island",
-//       farmName: "Bantayan Farm",
-//       farmLoc: "Bantayan Island",
-//       username: "juan123",
-//       email: "buyer@gmail.com",
-//       role: "Buyer",
-//       status: "Inactive",
-//     },
-//     {
-//       firstName: "Anna",
-//       lastName: "Santos",
-//       sex: "female",
-//       phoneNumber: "1234509876",
-//       address: "Sample Add Bantayan Island",
-//       farmName: "Alexandria Farm",
-//       farmLoc: "Alexandria Bantayan Island",
-//       username: "anna99",
-//       email: "anna@gmail.com",
-//       role: "Farmer",
-//       status: "Inactive",
-//     },
-//     {
-//       firstName: "Anna",
-//       lastName: "Santos",
-//       sex: "female",
-//       phoneNumber: "1234509876",
-//       address: "Sample Add Bantayan Island",
-//       farmName: "Alexandria Farm",
-//       farmLoc: "Alexandria Bantayan Island",
-//       username: "anna99",
-//       email: "anna@gmail.com",
-//       role: "Admin",
-//       status: "Inactive",
-//     },
-//   ];
-
-//   // ✅ Filter users by role and status
-//   const filteredUsers = users.filter((u) => {
-//     const roleMatch = option === "All" || !option ? true : u.role.toLowerCase() === option.toLowerCase();
-//     const typeMatch = type === "All" || !type ? true : u.status.toLowerCase() === type.toLowerCase();
-//     return roleMatch && typeMatch;
-//   });
-
-//   const headers = [
-//     <input
-//       key="selectAll"
-//       type="checkbox"
-//       checked={selectAll}
-//       className="accent-primaryYellow focus:ring-2 focus:ring-black"
-//       onChange={(e) => {
-//         const isChecked = e.target.checked;
-//         setSelectAll(isChecked);
-//         setSelected(Array(filteredUsers.length).fill(isChecked));
-//       }}
-//     />,
-//     "Full Name",
-//     "Email",
-//     "Role",
-//     "Status",
-//     "Actions",
-//   ];
-
-//   const handleCheckboxChange = (index) => {
-//     const updated = [...selected];
-//     updated[index] = !updated[index];
-//     setSelected(updated);
-
-//     setSelectAll(updated.every(Boolean));
-//   };
-
-//   return (
-//     <Table headers={headers}>
-//       {filteredUsers.map((item, index) => (
-//         <tr
-//           key={index}
-//           className="bg-yellow-100 text-gray-700 rounded-lg shadow-smtransition"
-//         >
-//           <td className="px-4 py-3 text-center">
-//             <input
-//               type="checkbox"
-//               checked={selected[index] || false}
-//               onChange={() => handleCheckboxChange(index)}
-//               className="accent-primaryYellow focus:ring-2 focus:ring-black"
-//             />
-//           </td>
-//           <td className="px-4 py-3 text-center font-medium">
-//             {item.firstName} {item.lastName}
-//           </td>
-//           <td className="px-4 py-3 text-center">{item.email}</td>
-//           <td className="px-4 py-3 text-center">{item.role}</td>
-//           <td
-//             className={`px-4 py-3 text-center font-medium ${
-//               item.status === "Active" ? "text-green-600" : "text-red-500"
-//             }`}
-//           >
-//             {item.status}
-//           </td>
-//           <td className="px-4 py-3 text-center flex flex-row gap-3 justify-center items-center">
-//             <Link
-//               to={`/${role}/users/view-users`}
-//               state={{ user: item }}
-//               className="flex items-center gap-2 bg-primaryYellow text-black px-4 py-2 rounded-lg hover:opacity-90 cursor-pointer"
-//             >
-//               <FaRegEye />
-//               <span>View</span>
-//             </Link>
-
-//             <Link
-//               to={`/${role}/users/edit-users`}
-//               state={{ user: item }}
-//               className="flex items-center gap-2 bg-yellow-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-yellow-200 cursor-pointer"
-//             >
-//               <FiEdit />
-//               <span>Edit</span>
-//             </Link>
-//           </td>
-//         </tr>
-//       ))}
-//     </Table>
-//   );
-// }
-
+// src/components/UserTable.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FaRegEye } from "react-icons/fa";
 import { FiEdit } from "react-icons/fi";
-import Table from "./Table";
 import { Link } from "react-router-dom";
+import Table from "./Table";
 
 export default function UserTable({
   role,
-  option = "All",            // role filter: All | Admin | Farmer | Buyer
-  type = "All",               // status filter: All | Active | Inactive | Deactivated
-  rows = [],                  // <- parent-provided rows (preferred)
-  onSelectionChange = () => {}, // <- notify parent of selected IDs
+  option = "All", // role filter: All | Admin | Farmer | Buyer
+  type = "All", // status filter: All | Active | Inactive | Deactivated
+  rows = [], // parent-provided rows
+  onSelectionChange = () => {}, // called with array of selected IDs
 }) {
   // Fallback mock data if no rows are provided
   const fallback = [
@@ -222,42 +72,56 @@ export default function UserTable({
     },
   ];
 
-  // Use parent rows if given, else fallback mock
-  const data = (Array.isArray(rows) && rows.length ? rows : fallback).map((u, idx) => ({
-    // Ensure each row has a stable id
-    id: u.id ?? u.user_id ?? u.email ?? String(idx),
-    ...u,
-  }));
+  // 1) Normalize rows only when `rows` changes
+  const data = useMemo(() => {
+    const source = Array.isArray(rows) && rows.length ? rows : fallback;
+    return source.map((u, idx) => ({
+      id: u.user_id ?? u.id ?? u.email ?? String(idx), // stable ID
+      ...u,
+    }));
+  }, [rows]);
 
-  // Filters
+  // 2) Apply filters, memoized
   const filteredUsers = useMemo(() => {
     return data.filter((u) => {
       const roleMatch =
-        option === "All" || !option ? true : (u.role || "").toLowerCase() === option.toLowerCase();
+        option === "All" || !option
+          ? true
+          : (u.role || "").toLowerCase() === option.toLowerCase();
       const typeMatch =
-        type === "All" || !type ? true : (u.status || "").toLowerCase() === type.toLowerCase();
+        type === "All" || !type
+          ? true
+          : (u.status || "").toLowerCase() === type.toLowerCase();
       return roleMatch && typeMatch;
     });
   }, [data, option, type]);
 
-  // Selection state (IDs)
-  const [selected, setSelected] = useState(() => new Set());
+  // 3) Selection state (set of IDs)
+  const [selectedIdsSet, setSelectedIdsSet] = useState(new Set());
 
-  // Keep selection valid when the filtered list changes
+  // keep selection in sync if rows change (remove IDs that no longer exist)
   useEffect(() => {
     const validIds = new Set(filteredUsers.map((u) => u.id));
-    setSelected((prev) => {
+    setSelectedIdsSet((prev) => {
       const next = new Set([...prev].filter((id) => validIds.has(id)));
-      if (next.size !== prev.size) onSelectionChange([...next]);
+      if (next.size !== prev.size) {
+        onSelectionChange(Array.from(next));
+      }
       return next;
     });
   }, [filteredUsers, onSelectionChange]);
 
-  // Derived select-all state
-  const allIds = useMemo(() => filteredUsers.map((u) => u.id), [filteredUsers]);
-  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
-  const someSelected = !allSelected && allIds.some((id) => selected.has(id));
+  // derived values
+  const allRowIds = useMemo(
+    () => filteredUsers.map((u) => u.id),
+    [filteredUsers]
+  );
+  const allSelected =
+    allRowIds.length > 0 && allRowIds.every((id) => selectedIdsSet.has(id));
+  const someSelected =
+    !allSelected && allRowIds.some((id) => selectedIdsSet.has(id));
 
+  // handle indeterminate state for checkbox
   const selectAllRef = useRef(null);
   useEffect(() => {
     if (selectAllRef.current) {
@@ -265,28 +129,32 @@ export default function UserTable({
     }
   }, [someSelected]);
 
-  // Toggle helpers
+  // toggle one row
   const toggleOne = (id) => {
-    setSelected((prev) => {
+    setSelectedIdsSet((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      onSelectionChange([...next]);
+      onSelectionChange(Array.from(next));
       return next;
     });
   };
 
+  // toggle all rows
   const toggleAll = () => {
-    setSelected((prev) => {
+    setSelectedIdsSet((prev) => {
       let next;
-      if (allSelected) next = new Set(); // clear all
-      else next = new Set(allIds);       // select all
-      onSelectionChange([...next]);
+      if (allSelected) {
+        next = new Set(); // clear all
+      } else {
+        next = new Set(allRowIds); // select all
+      }
+      onSelectionChange(Array.from(next));
       return next;
     });
   };
 
-  // Table headers (kept your UI)
+  // Table headers
   const headers = [
     <input
       key="selectAll"
@@ -307,7 +175,10 @@ export default function UserTable({
   return (
     <Table headers={headers}>
       {filteredUsers.map((item) => {
-        const checked = selected.has(item.id);
+        const checked = selectedIdsSet.has(item.id);
+        const first = item.firstName || item.first_name || "";
+        const last = item.lastName || item.last_name || "";
+
         return (
           <tr
             key={item.id}
@@ -323,7 +194,7 @@ export default function UserTable({
             </td>
 
             <td className="px-4 py-3 text-center font-medium">
-              {(item.firstName || item.first_name || "")} {(item.lastName || item.last_name || "")}
+              {first} {last}
             </td>
 
             <td className="px-4 py-3 text-center">{item.email}</td>
@@ -331,7 +202,9 @@ export default function UserTable({
 
             <td
               className={`px-4 py-3 text-center font-medium ${
-                (item.status || "").toLowerCase() === "active" ? "text-green-600" : "text-red-500"
+                (item.status || "").toLowerCase() === "active"
+                  ? "text-green-600"
+                  : "text-red-500"
               }`}
             >
               {item.status}

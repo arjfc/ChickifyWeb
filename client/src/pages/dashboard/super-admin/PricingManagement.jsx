@@ -1,10 +1,37 @@
+// pages/super-admin/pricing/PriceManagement.jsx (or your existing path)
+
+import { useEffect, useState, useMemo } from "react";
 import { FaCircleInfo } from "react-icons/fa6";
 import SmallCard from "../../../components/super-admin/SmallCard";
 import PriceTable from "../../../components/admin/tables/PriceTable";
 import Modal from "react-modal";
-import { useState } from "react";
 
-const modalStyle = {
+import {
+  fetchSizeBasePrices,
+  updateSizeBasePrice,
+} from "@/services/SuperadminBasePrice";
+
+const editModalStyle = {
+  content: {
+    top: "50%",
+    left: "50%",
+    right: "auto",
+    bottom: "auto",
+    transform: "translate(-50%, -50%)",
+    borderRadius: 20,
+    padding: 20,
+    maxHeight: "90vh",
+    width: "90vw",
+    maxWidth: "480px",
+    overflow: "auto",
+  },
+  overlay: {
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    zIndex: 1000,
+  },
+};
+
+const infoModalStyle = {
   content: {
     top: "50%",
     left: "50%",
@@ -15,6 +42,7 @@ const modalStyle = {
     padding: 10,
     maxHeight: "100vh",
     width: "25vw",
+    minWidth: 320,
     overflow: "visible",
   },
   overlay: {
@@ -22,255 +50,250 @@ const modalStyle = {
     zIndex: 1000,
   },
 };
-
-const modalStyle2 = {
-  content: {
-    top: "50%",
-    left: "50%",
-    right: "auto",
-    bottom: "auto",
-    transform: "translate(-50%, -50%)",
-    borderRadius: 20,
-    padding: 10,
-    maxHeight: "100vh",
-    width: "25vw",
-    overflow: "visible",
-  },
-  overlay: {
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    zIndex: 1000,
-  },
-};
-
-const sizes = [
-  {
-    size: "Extra Large",
-    id: "xl",
-    number: 220,
-  },
-  {
-    size: "Large",
-    id: "lg",
-    number: 200,
-  },
-  {
-    size: "Medium",
-    id: "md",
-    number: 180,
-  },
-  {
-    size: "Small",
-    id: "sm",
-    number: 150,
-  },
-  {
-    size: "Extra Small",
-    id: "xs",
-    number: 120,
-  },
-];
 
 export default function PriceManagement() {
+  const [sizes, setSizes] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
-  const handleModal = () => {
-    setIsModalOpen(!isModalOpen);
+  // local editable values keyed by size_id
+  const [editValues, setEditValues] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  /** Load sizes from DB */
+  const reloadSizes = async () => {
+    setLoading(true);
+    try {
+      const rows = await fetchSizeBasePrices();
+      setSizes(rows);
+    } catch (e) {
+      console.error("[fetchSizeBasePrices] error:", e);
+      alert(e.message || "Failed to load base prices.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    reloadSizes();
+  }, []);
+
+  /** Open edit modal, pre-fill inputs with current base prices */
+  const handleOpenEditModal = () => {
+    const map = {};
+    sizes.forEach((s) => {
+      map[s.size_id] = s.price_per_tray != null ? String(s.price_per_tray) : "";
+    });
+    setEditValues(map);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    if (saving) return;
+    setIsModalOpen(false);
   };
 
   const handleInfoModal = () => {
-    setIsInfoModalOpen(!isInfoModalOpen);
+    setIsInfoModalOpen((prev) => !prev);
   };
+
+  /** Save all changed base prices via RPC */
+  const handleSaveChanges = async () => {
+    if (saving) return;
+
+    // collect changed + valid values
+    const updates = [];
+    for (const size of sizes) {
+      const raw = editValues[size.size_id];
+      if (raw == null || raw === "") continue;
+
+      const newVal = Number(raw);
+      if (!Number.isFinite(newVal) || newVal <= 0) {
+        alert(`Invalid price for "${size.size_description}".`);
+        return;
+      }
+
+      const currentVal = Number(size.price_per_tray ?? 0);
+      if (Math.abs(newVal - currentVal) < 0.0001) continue; // unchanged
+
+      updates.push({ size_id: size.size_id, value: newVal });
+    }
+
+    if (!updates.length) {
+      setIsModalOpen(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // sequential calls; can be Promise.all if you prefer
+      for (const u of updates) {
+        await updateSizeBasePrice(u.size_id, u.value);
+      }
+      await reloadSizes();
+      setIsModalOpen(false);
+    } catch (e) {
+      console.error("[updateSizeBasePrice] error:", e);
+      alert(e.message || "Failed to update base prices.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cards = useMemo(
+    () =>
+      sizes.map((s) => ({
+        id: s.size_id,
+        label: s.size_description,
+        pricePerTray: Number(s.price_per_tray ?? 0),
+      })),
+    [sizes]
+  );
 
   return (
     <div className="flex flex-col gap-5">
+      {/* CURRENT GLOBAL BASE PRICE CARDS */}
       <div className="flex flex-col gap-5 p-6 rounded-lg border border-gray-200 shadow-lg">
         <div className="flex flex-row justify-between items-center">
           <div className="flex flex-row gap-3 items-center">
             <h1 className="text-2xl text-primaryYellow font-semibold">
-              Current Base Price of Tray
+              Current Global Base Price of Tray
             </h1>
             <FaCircleInfo
               onClick={handleInfoModal}
               className="text-lg text-gray-400 cursor-pointer"
+              title="What is Price per Tray?"
             />
           </div>
+          <button
+            onClick={handleOpenEditModal}
+            disabled={loading}
+            className="bg-primaryYellow text-white font-medium rounded-lg px-4 py-2 text-sm hover:opacity-90 disabled:opacity-60"
+          >
+            Edit Base Prices
+          </button>
         </div>
-        <div className="grid grid-cols-5 gap-5">
-          {sizes.map((data) => (
-            <SmallCard
-              size={data.size}
-              id={data.id}
-              key={data.id}
-              number={data.number}
-            />
-          ))}
-        </div>
+
+        {loading ? (
+          <p className="text-sm text-gray-500">Loading base prices…</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-5">
+            {cards.map((c) => (
+              <SmallCard
+                key={c.id}
+                id={c.id}
+                size={c.label}
+                number={c.pricePerTray}
+              />
+            ))}
+            {!cards.length && (
+              <p className="text-sm text-gray-500 col-span-full">
+                No sizes found. Check your size table.
+              </p>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* OPTIONAL: table below (if you still need it) */}
       <div className="flex flex-col gap-5">
         <div className="flex flex-row justify-between items-center">
           <div className="flex flex-row gap-5 items-center text-primaryYellow text-3xl font-bold">
             <h1>Current Base Price Management</h1>
-          </div>
-          <div
-            onClick={handleModal}
-            className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90"
-          >
-            <p className="text-lg">Edit Base Price</p>
           </div>
         </div>
         <div className="p-6 rounded-lg border border-gray-200 shadow-lg">
           <PriceTable />
         </div>
       </div>
-      <Modal isOpen={isModalOpen} style={modalStyle}>
-        <div className="flex flex-col px-5 py-10 gap-2">
+
+      {/* EDIT MODAL – change base prices per tray */}
+      <Modal
+        isOpen={isModalOpen}
+        onRequestClose={handleCloseEditModal}
+        style={editModalStyle}
+        ariaHideApp={false}
+      >
+        <div className="flex flex-col gap-4">
           <h1 className="text-primaryYellow font-bold text-xl text-center">
-            Edit Final Base Price
+            Edit Global Base Price (per Tray)
           </h1>
-          {[...Array(6)].map((_, index) => (
-            <div className="flex flex-col gap-1">
-              <label htmlFor="" className="text-gray-400 font-bold">
-                Extra Large
+
+          {sizes.map((s) => (
+            <div
+              key={s.size_id}
+              className="flex flex-col gap-1 text-sm mb-2"
+            >
+              <label className="text-gray-500 font-semibold">
+                {s.size_description}{" "}
+                <span className="text-xs text-gray-400">
+                  ({s.eggs_per_tray} eggs / tray)
+                </span>
               </label>
               <input
-                type="text"
-                className="w-full px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 drop-shadow-custom shadow-md"
+                type="number"
+                min="0"
+                step="0.01"
+                value={editValues[s.size_id] ?? ""}
+                onChange={(e) =>
+                  setEditValues((prev) => ({
+                    ...prev,
+                    [s.size_id]: e.target.value,
+                  }))
+                }
+                className="w-full px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 shadow-sm"
+                placeholder="Enter price per tray (₱)"
               />
             </div>
           ))}
-          <div className="flex flex-row items-center justify-between gap-5">
-            <div
-              onClick={handleModal}
-              className="flex-1 text-center bg-gray-400 text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90"
+
+          <div className="flex flex-row items-center justify-between gap-4 mt-4">
+            <button
+              onClick={handleCloseEditModal}
+              disabled={saving}
+              className="flex-1 text-center bg-gray-400 text-white font-medium rounded-lg px-5 py-2 hover:opacity-90 disabled:opacity-60"
             >
-              <p className="text-base">Cancel</p>
-            </div>
-            <div
-              onClick={handleModal}
-              className="flex-1 text-center bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90"
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveChanges}
+              disabled={saving}
+              className="flex-1 text-center bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 hover:opacity-90 disabled:opacity-60"
             >
-              <p className="text-base">Save Changes</p>
-            </div>
-          </div>  
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
         </div>
       </Modal>
-      <Modal isOpen={isInfoModalOpen} style={modalStyle2}>
+
+      {/* INFO MODAL */}
+      <Modal
+        isOpen={isInfoModalOpen}
+        onRequestClose={handleInfoModal}
+        style={infoModalStyle}
+        ariaHideApp={false}
+      >
         <div className="flex flex-col gap-5 items-center justify-center p-6">
           <h1 className="text-primaryYellow font-bold text-xl">
             Price Per Tray
           </h1>
-          <p className="font-semibold opacity-70 text-center">
+          <p className="font-semibold opacity-70 text-center text-sm">
             Price per Tray refers to the cost assigned to one standard tray of
-            eggs {"(typically 30 pieces)."} It serves as the base unit for
-            pricing in egg sales. This metric is commonly used in poultry
-            trading because it standardizes egg pricing, making it simple to
-            compare, track, and adjust prices across markets.
+            eggs (typically 30 pieces). It serves as the base unit for pricing
+            in egg sales. This metric is commonly used in poultry trading
+            because it standardizes egg pricing, making it simple to compare,
+            track, and adjust prices across markets.
           </p>
-          <div
+          <button
             onClick={handleInfoModal}
             className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90 w-full text-center"
           >
-            <p className="text-lg">Okay</p>
-          </div>
+            <span className="text-lg">Okay</span>
+          </button>
         </div>
       </Modal>
     </div>
   );
 }
-
-
-
-
-
-
-// import React, { useState } from "react";
-// import { FaCircleInfo } from "react-icons/fa6";
-// import SmallCard from "../../../components/super-admin/SmallCard";
-// import Modal from "react-modal";
-
-// const modalStyle2 = {
-//   content: {
-//     top: "50%",
-//     left: "50%",
-//     right: "auto",
-//     bottom: "auto",
-//     transform: "translate(-50%, -50%)",
-//     borderRadius: 20,
-//     padding: 10,
-//     maxHeight: "100vh",
-//     width: "25vw",
-//     overflow: "visible",
-//   },
-//   overlay: {
-//     backgroundColor: "rgba(0, 0, 0, 0.8)",
-//     zIndex: 1000,
-//   },
-// };
-
-// const sizes = [
-//   { size: "Extra Large", id: "xl", number: 220 },
-//   { size: "Large",       id: "lg", number: 200 },
-//   { size: "Medium",      id: "md", number: 180 },
-//   { size: "Small",       id: "sm", number: 150 },
-//   { size: "Extra Small", id: "xs", number: 120 },
-// ];
-
-// export default function PricingManagement() {
-//   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
-//   const handleInfoModal = () => setIsInfoModalOpen((s) => !s);
-
-//   return (
-//     <div className="flex flex-col gap-5">
-//       {/* Current Base Price of Tray */}
-//       <div className="flex flex-col gap-5 p-6 rounded-lg border border-gray-200 shadow-lg">
-//         <div className="flex flex-row justify-between items-center">
-//           <div className="flex flex-row gap-3 items-center">
-//             <h1 className="text-2xl text-primaryYellow font-semibold">
-//               Current Base Price of Tray
-//             </h1>
-//             <FaCircleInfo
-//               onClick={handleInfoModal}
-//               className="text-lg text-gray-400 cursor-pointer"
-//               title="What is Price per Tray?"
-//             />
-//           </div>
-//         </div>
-
-//         <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
-//           {sizes.map((data) => (
-//             <SmallCard
-//               size={data.size}
-//               id={data.id}
-//               key={data.id}
-//               number={data.number}
-//             />
-//           ))}
-//         </div>
-//       </div>
-
-//       {/* Info modal only */}
-//       <Modal isOpen={isInfoModalOpen} style={modalStyle2} ariaHideApp={false}>
-//         <div className="flex flex-col gap-5 items-center justify-center p-6">
-//           <h1 className="text-primaryYellow font-bold text-xl">Price Per Tray</h1>
-//           <p className="font-semibold opacity-70 text-center">
-//             Price per Tray refers to the cost assigned to one standard tray of
-//             eggs (typically 30 pieces). It serves as the base unit for pricing
-//             in egg sales. This metric is commonly used in poultry trading
-//             because it standardizes egg pricing, making it simple to compare,
-//             track, and adjust prices across markets.
-//           </p>
-//           <div
-//             onClick={handleInfoModal}
-//             className="bg-primaryYellow text-white font-medium rounded-lg px-5 py-2 cursor-pointer hover:opacity-90 w-full text-center"
-//           >
-//             <p className="text-lg">Okay</p>
-//           </div>
-//         </div>
-//       </Modal>
-
-      
-//     </div>
-//   );
-// }
-

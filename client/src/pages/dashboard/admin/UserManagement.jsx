@@ -1,16 +1,41 @@
 // src/pages/admin/UserManagement.jsx
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import UserFarmerTable from "../../../components/admin/tables/UserFarmerTable";
 import { LuUserRound } from "react-icons/lu";
 import DashboardCard from "../../../components/DashboardCard";
 import FarmerRequestsTable from "../../../components/admin/tables/FarmerRequest";
+import ViewPermitModal from "@/components/admin/modals/ViewPermitModal";
+import { fetchFarmerPermit } from "@/services/FarmerRequests"; // ✅ add this
 
 export default function UserManagement() {
   const [refreshTick, setRefreshTick] = useState(0);
   const bumpRefresh = () => setRefreshTick((t) => t + 1);
   const farmerRequestsTableRef = useRef();
 
+  // For Viewing Permit Modal
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isPermitOpen, setIsPermitOpen] = useState(false);
+  const [permitLoading, setPermitLoading] = useState(false);
   const [showApproveAll, setShowApproveAll] = useState(false);
+
+  const handleViewPermit = async (row) => {
+    if (!row?.farmer_id) {
+      console.warn("No farmer_id on row:", row);
+      return;
+    }
+
+    setPermitLoading(true);
+    try {
+      const permit = await fetchFarmerPermit(row.farmer_id);
+      console.log("permit from RPC:", permit);
+      setSelectedRequest(permit || { permit_url: null });
+      setIsPermitOpen(true);
+    } catch (e) {
+      console.error("Failed to load farmer permit:", e);
+    } finally {
+      setPermitLoading(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-2 gap-6 relative">
@@ -18,12 +43,12 @@ export default function UserManagement() {
       <DashboardCard
         title="Total Active Farmer Users"
         icon={<LuUserRound className="text-6xl text-primaryYellow" />}
-        data={15300}
+        data={5}
       />
       <DashboardCard
         title="Total Active Buyer Users"
         icon={<LuUserRound className="text-6xl text-primaryYellow" />}
-        data={15300}
+        data={22}
       />
 
       {/* Farmer Verification header */}
@@ -48,7 +73,19 @@ export default function UserManagement() {
           refreshTick={refreshTick}
           onActionComplete={bumpRefresh}
           onHeaderCheck={(checked) => setShowApproveAll(checked)}
+          onSelectionChange={() => {}}
+          onViewPermit={handleViewPermit}
         />
+
+        <ViewPermitModal
+          isOpen={isPermitOpen}
+          onClose={() => setIsPermitOpen(false)}
+          request={selectedRequest}
+        />
+
+        {permitLoading && (
+          <div className="mt-2 text-xs text-gray-500">Loading permit…</div>
+        )}
       </div>
 
       {/* Farmers list */}
@@ -68,6 +105,154 @@ export default function UserManagement() {
     </div>
   );
 }
+
+// // src/pages/admin/UserManagement.jsx
+// import React, { useState, useRef, useEffect } from "react";
+// import UserFarmerTable from "../../../components/admin/tables/UserFarmerTable";
+// import { LuUserRound } from "react-icons/lu";
+// import DashboardCard from "../../../components/DashboardCard";
+// import FarmerRequestsTable from "../../../components/admin/tables/FarmerRequest";
+// import ViewPermitModal from "@/components/admin/modals/ViewPermitModal";
+
+// export default function UserManagement() {
+//   const [refreshTick, setRefreshTick] = useState(0);
+//   const bumpRefresh = () => setRefreshTick((t) => t + 1);
+//   const farmerRequestsTableRef = useRef();
+  
+//   // For Viewing Permit Modal
+//   const [selectedRequest, setSelectedRequest] = useState(null);
+//   const [isPermitOpen, setIsPermitOpen] = useState(false);
+//   const [permitLoading, setPermitLoading] = useState(false);
+//   const [showApproveAll, setShowApproveAll] = useState(false);
+
+//    const handleViewPermit = async (row) => {
+//     // row comes from FarmerRequestsTable, should have row.farmer_id
+//     if (!row?.farmer_id) {
+//       console.warn("No farmer_id on row:", row);
+//       return;
+//     }
+
+//     setPermitLoading(true);
+//     try {
+//       const permit = await ViewPermitModal(row.farmer_id);
+//       // modal expects an object with permit_url / permit_image_url keys
+//       setSelectedRequest(permit || { permit_url: null });
+//       setIsPermitOpen(true);
+//     } catch (e) {
+//       console.error("Failed to load farmer permit:", e);
+//       // you can show a toast or error UI if you want
+//     } finally {
+//       setPermitLoading(false);
+//     }
+//   };
+
+//   return (
+//     <div className="grid grid-cols-2 gap-6 relative">
+//       {/* KPI Cards */}
+//       <DashboardCard
+//         title="Total Active Farmer Users"
+//         icon={<LuUserRound className="text-6xl text-primaryYellow" />}
+//         data={15300}
+//       />
+//       <DashboardCard
+//         title="Total Active Buyer Users"
+//         icon={<LuUserRound className="text-6xl text-primaryYellow" />}
+//         data={15300}
+//       />
+
+//       {/* Farmer Verification header */}
+//       <div className="col-span-2 flex items-center justify-between">
+//         <h1 className="text-2xl font-bold text-primaryYellow">
+//           Farmer Verification
+//         </h1>
+//         {showApproveAll && (
+//           <button
+//             onClick={() => farmerRequestsTableRef.current?.approveAllSelected()}
+//             className="px-4 py-2 rounded-lg font-medium shadow bg-primaryYellow text-white hover:opacity-90"
+//           >
+//             Approve All
+//           </button>
+//         )}
+//       </div>
+
+//       {/* Farmer Verification table */}
+//       <div className="col-span-2 p-6 rounded-lg border border-gray-200 shadow-lg">
+//         <FarmerRequestsTable
+//           ref={farmerRequestsTableRef}
+//           refreshTick={refreshTick}
+//           onActionComplete={bumpRefresh}
+//           onHeaderCheck={(checked) => setShowApproveAll(checked)}
+//           onSelectionChange={() => {}}
+//           onViewPermit={handleViewPermit} // ✅ here
+//         />
+
+//         <ViewPermitModal
+//           isOpen={isPermitOpen}
+//           onClose={() => setIsPermitOpen(false)}
+//           request={selectedRequest}
+//         />
+
+//         {permitLoading && (
+//           <div className="mt-2 text-xs text-gray-500">
+//             Loading permit…
+//           </div>
+//         )}
+//       </div>
+
+//       {/* Farmers list */}
+//       <div className="col-span-2">
+//         <h1 className="text-2xl font-bold text-primaryYellow">
+//           List of Farmers
+//         </h1>
+//       </div>
+//       <div className="col-span-2 p-6 rounded-lg border border-gray-200 shadow-lg">
+//         <UserFarmerTable
+//           role="admin"
+//           option="Farmer"
+//           type="All"
+//           refreshTick={refreshTick}
+//         />
+//       </div>
+//     </div>
+//   );
+// }
+
+      // Farmer Verification table
+//       <div className="col-span-2 p-6 rounded-lg border border-gray-200 shadow-lg">
+//         <FarmerRequestsTable
+//           ref={farmerRequestsTableRef}
+//           refreshTick={refreshTick}
+//           onActionComplete={bumpRefresh}
+//           onHeaderCheck={(checked) => setShowApproveAll(checked)}
+//           onViewPermit={(request) => {
+//             setSelectedRequest(request);
+//             setIsPermitOpen(true);
+//           }}
+//         />
+//         <FarmerPermitModal
+//           isOpen={isPermitOpen}
+//           onClose={() => setIsPermitOpen(false)}
+//           request={selectedRequest}
+//         />
+//       </div>
+
+//       {/* Farmers list */}
+//       <div className="col-span-2">
+//         <h1 className="text-2xl font-bold text-primaryYellow">
+//           List of Farmers
+//         </h1>
+//       </div>
+//       <div className="col-span-2 p-6 rounded-lg border border-gray-200 shadow-lg">
+//         <UserFarmerTable
+//           role="admin"
+//           option="Farmer"
+//           type="All"
+//           refreshTick={refreshTick}
+//         />
+//       </div>
+//     </div>
+//   );
+// }
 
 
 // // src/pages/admin/UserManagement.jsx

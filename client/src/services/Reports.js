@@ -218,9 +218,7 @@ export async function fetchFarmersUnderCoop(adminId, status = "approved") {
   return Array.isArray(data) ? data : [];
 }
 
-/**
- * Convenience wrapper that uses the caller’s auth.uid()
- */
+
 export async function fetchMyFarmersList(status = "approved") {
   const { data: userRes, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userRes?.user?.id)
@@ -241,3 +239,15 @@ export async function fetchAdminProfile() {
   return rows[0] || null;
 }
 
+
+export async function fetchSuperadminProfile() {
+  const { data, error } = await supabase.rpc("view_superadmin_profile");
+
+  if (error) {
+    console.error("Error fetching superadmin profile:", error);
+    throw error;
+  }
+
+  // RPC returns a table → array of rows, but this one should only ever return 1 row
+  return data?.[0] ?? null;
+}
