@@ -1,12 +1,7 @@
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
+import React, {useEffect,useMemo,useState,forwardRef,useImperativeHandle,} from "react";
 import dayjs from "dayjs";
 import { fetchActivityLogs } from "@/services/activityLogs";
+import { fetchSuperadminProfile } from "@/services/Reports"; // ✅ NEW
 
 // PDF libs
 import jsPDF from "jspdf";
@@ -99,7 +94,7 @@ const LogsTable = forwardRef(function LogsTable(
       hour12: true,
     });
 
-  // ===== Unicode font (optional, keeps consistency with other exports) =====
+  // ===== Unicode font (same pattern as 1st code) =====
   const FONT_NAME = "NotoSans";
   const FONT_FILE = "NotoSans-Regular.ttf";
   const FONT_URL = "/fonts/NotoSans-Regular.ttf"; // put TTF in public/fonts/
@@ -118,8 +113,11 @@ const LogsTable = forwardRef(function LogsTable(
       if (!res.ok) throw new Error(`Font fetch failed (${res.status})`);
       const buf = await res.arrayBuffer();
       const base64 = arrayBufferToBase64(buf);
+
       doc.addFileToVFS(FONT_FILE, base64);
       doc.addFont(FONT_FILE, FONT_NAME, "normal");
+      doc.addFont(FONT_FILE, FONT_NAME, "bold");
+
       doc.setFont(FONT_NAME, "normal");
       return true;
     } catch (e) {
@@ -128,50 +126,180 @@ const LogsTable = forwardRef(function LogsTable(
     }
   };
 
-  const buildDateLabel = (from, to) => {
-    if (from && to) return `${from} to ${to}`;
-    if (from) return `From ${from}`;
-    if (to) return `Until ${to}`;
-    return "All dates";
+  // ===== Background + ICONS (same style as 1st code) =====
+  const BG_URL = "/background.png";
+  const ADMIN_ICON_URL = "/icons/user.png";
+  const ADDRESS_ICON_URL = "/icons/pin.png";
+  const PHONE_ICON_URL = "/icons/telephone.png";
+  // const EMAIL_ICON_URL = "/icons/email.png";
+
+  const loadBgImageAsDataUrl = async () => {
+    try {
+      const res = await fetch(BG_URL);
+      if (!res.ok) throw new Error(`BG fetch failed (${res.status})`);
+      const blob = await res.blob();
+
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn(
+        "[LogsTable] Failed to load PDF background:",
+        e?.message || e
+      );
+      return null;
+    }
   };
 
-  // ===== Expose export API =====
+  const loadImageAsDataUrl = async (url) => {
+    if (!url) return null;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn(
+        "[LogsTable] Failed to load icon:",
+        url,
+        e?.message || e
+      );
+      return null;
+    }
+  };
+
+  // Helper to pretty-format dates like "November 27, 2025"
+  const formatPrettyDate = (raw) => {
+    if (!raw) return null;
+    const d = dayjs(raw);
+    return d.isValid() ? d.format("MMMM D, YYYY") : null;
+  };
+
+  // ===== Expose export API (copied/adapted from 1st code) =====
   useImperativeHandle(ref, () => ({
     async exportPdf(meta = {}) {
       const {
         title = "Chickify Activity Logs",
-        subtitle = `${selectedOption} • ${type} • ${buildDateLabel(
-          fromDate,
-          toDate
-        )}`,
-        filename = `activity_logs_${selectedOption}_${type}_${
-          fromDate || "all"
-        }_${toDate || "all"}.pdf`,
+        subtitle: metaSubtitle,
+        dateFrom: metaFrom,
+        dateTo: metaTo,
+        filename,
       } = meta;
+
+      const from = metaFrom || fromDate;
+      const to = metaTo || toDate;
+
+      // 🔹 Build subtitle base (ROLE • TYPE)
+      const subtitleBase =
+        metaSubtitle ||
+      `${selectedOption || "All"} • ${type || "All"}`
+      const subtitleHeader = String(subtitleBase || "").toUpperCase();
+
+      // 🔹 Fetch Super Admin profile (same approach as 1st code)
+      let superadminName = "—";
+      let superadminAddress = "—";
+      let superadminContact = "—";
+      let superadminEmail = "—";
+
+      try {
+        const profile = await fetchSuperadminProfile();
+        if (profile) {
+          superadminName = profile.superadmin_full_name || "—";
+          superadminAddress = profile.address || "—";
+          superadminContact = profile.contact_no || "—";
+          superadminEmail = profile.superadmin_email || "—";
+        }
+      } catch (e) {
+        console.warn(
+          "[LogsTable] Failed to load superadmin profile for PDF:",
+          e
+        );
+      }
 
       const doc = new jsPDF({
         orientation: "portrait",
         unit: "pt",
         format: "letter",
       });
+
       const hasUnicode = await ensureUnicodeFont(doc);
 
-      const marginX = 40;
-      let cursorY = 40;
+      // 🔹 Load background + icons
+      const [bgDataUrl, adminIcon, addressIcon, phoneIcon /* emailIcon */] =
+        await Promise.all([
+          loadBgImageAsDataUrl(),
+          loadImageAsDataUrl(ADMIN_ICON_URL),
+          loadImageAsDataUrl(ADDRESS_ICON_URL),
+          loadImageAsDataUrl(PHONE_ICON_URL),
+          // loadImageAsDataUrl(EMAIL_ICON_URL),
+        ]);
 
-      // Title
-      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "bold");
+      const pageSize = doc.internal.pageSize;
+      const pageWidth = pageSize.width || pageSize.getWidth();
+      const pageHeight = pageSize.height || pageSize.getHeight();
+      const centerX = pageWidth / 2;
+
+      // 🔹 Background first
+      if (bgDataUrl) {
+        doc.addImage(bgDataUrl, "PNG", 0, 0, pageWidth, pageHeight);
+      }
+
+      // Margins similar to 1st code
+      const firstPageTop = 158;
+      const otherPagesTop = 72;
+      const marginBottom = 72;
+      const marginX = 40;
+
+      let cursorY = firstPageTop;
+
+      const prettyFrom = formatPrettyDate(from);
+      const prettyTo = formatPrettyDate(to);
+
+      const rangeTxt =
+        from || to
+          ? `Date range: ${prettyFrom || "—"} to ${prettyTo || "—"}`
+          : "Date range: All";
+
+      const generatedNow = dayjs();
+      const generatedTxt = `Generated on: ${generatedNow.format(
+        "MMMM D, YYYY h:mm A"
+      )}`;
+
+      // ===== HEADER =====
+      // Title – centered
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
-      doc.text(title, marginX, cursorY);
+      doc.text(title, centerX, cursorY, { align: "center" });
       cursorY += 22;
 
-      // Subtitle
-      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
-      doc.setFontSize(12);
-      doc.text(subtitle, marginX, cursorY);
-      cursorY += 12;
+      // Subtitle – centered (ROLE • TYPE)
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(subtitleHeader, centerX, cursorY, { align: "center" });
+      cursorY += 40;
 
-      // Build body from filtered rows
+      // Date range – right aligned
+      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text(rangeTxt, pageWidth - marginX, cursorY, { align: "right" });
+      cursorY += 14;
+
+      // Generated on – right aligned (under date range)
+      doc.text(generatedTxt, pageWidth - marginX, cursorY, {
+        align: "right",
+      });
+
+      cursorY += 16;
+
+      // ===== Build body from filtered rows =====
       const body = (filtered || []).map((r) => [
         fmt(r.created_at),
         r.actor_user ?? "(no name)",
@@ -188,26 +316,106 @@ const LogsTable = forwardRef(function LogsTable(
         styles: {
           font: hasUnicode ? FONT_NAME : "helvetica",
           fontSize: 9,
-          cellPadding: 4,
+          cellPadding: 6,
+          minCellHeight: 18,
           halign: "center",
+          textColor: [33, 33, 33],
         },
         headStyles: {
+          font: "helvetica",
+          fontSize: 9,
           fillColor: [255, 210, 77],
           textColor: [33, 33, 33],
         },
+        columnStyles: {
+          5: { cellWidth: 150, halign: "left" }, // index 5 = DETAILS
+        },
+        margin: {
+          top: otherPagesTop,
+          bottom: marginBottom,
+          left: marginX,
+          right: marginX,
+        },
         didDrawPage: () => {
-          const pageSize = doc.internal.pageSize;
-          const pageHeight = pageSize.height || pageSize.getHeight();
-          doc.setFontSize(10);
+          const pageSizeInner = doc.internal.pageSize;
+          const pageWidthInner =
+            pageSizeInner.width || pageSizeInner.getWidth();
+          const pageHeightInner =
+            pageSizeInner.height || pageSizeInner.getHeight();
+
+          const footerTopY = pageHeightInner - marginBottom + 16;
+          const pageLabelY = pageHeightInner - marginBottom / 2;
+
+          const iconSize = 12;
+          const iconTextGap = 6;
+          const groupGap = 24;
+
+          doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+          doc.setFontSize(9);
+
+          const rowY = footerTopY;
+          let x = marginX;
+
+          const drawIconLabel = (icon, label) => {
+            if (!label) return;
+
+            if (icon) {
+              doc.addImage(
+                icon,
+                "PNG",
+                x,
+                rowY - iconSize + 2,
+                iconSize,
+                iconSize
+              );
+            }
+
+            const textX = x + (icon ? iconSize + iconTextGap : 0);
+            doc.text(label, textX, rowY);
+
+            const textWidth = doc.getTextWidth(label);
+            const totalWidth =
+              (icon ? iconSize + iconTextGap : 0) +
+              textWidth +
+              groupGap;
+
+            x += totalWidth;
+          };
+
+          // 🔹 One row: Superadmin name, address, contact
+          drawIconLabel(adminIcon, `${superadminName}`);
+          drawIconLabel(
+            addressIcon,
+            superadminAddress ? `${superadminAddress}` : ""
+          );
+          drawIconLabel(
+            phoneIcon,
+            superadminContact ? `${superadminContact}` : ""
+          );
+          // drawIconLabel(
+          //   emailIcon,
+          //   superadminEmail ? `${superadminEmail}` : ""
+          // );
+
+          // Page number on the right
           doc.text(
             `Page ${doc.getNumberOfPages()}`,
-            marginX,
-            pageHeight - 20
+            pageWidthInner - marginX,
+            pageLabelY,
+            { align: "right" }
           );
         },
       });
 
-      doc.save(filename);
+      const safeName =
+        filename ||
+        `activity_logs_${(selectedOption || "all")
+          .replace(/\s+/g, "_")
+          .toLowerCase()}_${(type || "all")
+          .replace(/\s+/g, "_")
+          .toLowerCase()}_${from || "all"}_${to || "all"}.pdf`;
+
+      doc.save(safeName);
     },
   }));
 
@@ -281,6 +489,8 @@ const LogsTable = forwardRef(function LogsTable(
 });
 
 export default LogsTable;
+
+
 
 
 // import React, { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from "react";

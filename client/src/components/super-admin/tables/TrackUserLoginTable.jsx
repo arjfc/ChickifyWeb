@@ -6,6 +6,7 @@ import React, {
 } from "react";
 import dayjs from "dayjs";
 import { fetchLastSignins } from "@/services/activityLogs";
+import { fetchSuperadminProfile } from "@/services/Reports"; // 👈 NEW
 
 // PDF libs
 import jsPDF from "jspdf";
@@ -18,7 +19,7 @@ const TrackUserTable = forwardRef(function TrackUserTable(
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Helper to build pretty label for date range
+  // Helper to build pretty label for date range (raw props)
   const buildDateLabel = (from, to) => {
     if (from && to) return `${from} to ${to}`;
     if (from) return `From ${from}`;
@@ -90,7 +91,7 @@ const TrackUserTable = forwardRef(function TrackUserTable(
         })
       : "—";
 
-  // ===== Unicode font (optional, consistent) =====
+  // ===== Unicode font (same pattern as 1st code) =====
   const FONT_NAME = "NotoSans";
   const FONT_FILE = "NotoSans-Regular.ttf";
   const FONT_URL = "/fonts/NotoSans-Regular.ttf";
@@ -110,54 +111,181 @@ const TrackUserTable = forwardRef(function TrackUserTable(
       if (!res.ok) throw new Error(`Font fetch failed (${res.status})`);
       const buf = await res.arrayBuffer();
       const base64 = arrayBufferToBase64(buf);
+
       doc.addFileToVFS(FONT_FILE, base64);
       doc.addFont(FONT_FILE, FONT_NAME, "normal");
+      doc.addFont(FONT_FILE, FONT_NAME, "bold");
       doc.setFont(FONT_NAME, "normal");
       return true;
     } catch (e) {
-      console.warn(
-        "[TrackUserTable] Unicode font not loaded:",
-        e?.message || e
-      );
+      console.warn("[TrackUserTable] Unicode font not loaded:", e?.message || e);
       return false;
     }
   };
 
-  // ===== Expose export API =====
+  // ===== Background & ICONS (copied pattern from 1st code) =====
+  const BG_URL = "/background.png";
+  const ADMIN_ICON_URL = "/icons/name.png";
+  const ADDRESS_ICON_URL = "/icons/location.png";
+  const PHONE_ICON_URL = "/icons/call.png";
+  // const EMAIL_ICON_URL = "/icons/email.png";
+
+  const loadBgImageAsDataUrl = async () => {
+    try {
+      const res = await fetch(BG_URL);
+      if (!res.ok) throw new Error(`BG fetch failed (${res.status})`);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn("[TrackUserTable] Failed to load PDF background:", e?.message || e);
+      return null;
+    }
+  };
+
+  const loadImageAsDataUrl = async (url) => {
+    if (!url) return null;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn("[TrackUserTable] Failed to load icon:", url, e?.message || e);
+      return null;
+    }
+  };
+
+  // ===== Expose export API (same style as 1st code) =====
   useImperativeHandle(ref, () => ({
     async exportPdf(meta = {}) {
+      const prettyFrom = fromDate
+        ? dayjs(fromDate).isValid()
+          ? dayjs(fromDate).format("MMMM D, YYYY")
+          : fromDate
+        : null;
+      const prettyTo = toDate
+        ? dayjs(toDate).isValid()
+          ? dayjs(toDate).format("MMMM D, YYYY")
+          : toDate
+        : null;
+
       const {
         title = "Chickify Track Last Sign-ins",
-        subtitle = `${
-          userrole === "All" ? "All roles" : userrole
-        } • ${buildDateLabel(fromDate, toDate)}`,
+        subtitle = userrole === "All" ? "All Roles" : userrole,
         filename = `user_signins_${userrole}_${
           fromDate || "all"
         }_${toDate || "all"}.pdf`,
       } = meta;
+
+      // 🔹 Fetch Super Admin profile via RPC (same as 1st code)
+      let superadminName = "—";
+      let superadminAddress = "—";
+      let superadminContact = "—";
+      let superadminEmail = "—";
+
+      try {
+        const profile = await fetchSuperadminProfile();
+        if (profile) {
+          superadminName = profile.superadmin_full_name || "—";
+          superadminAddress = profile.address || "—";
+          superadminContact = profile.contact_no || "—";
+          superadminEmail = profile.superadmin_email || "—";
+        }
+      } catch (e) {
+        console.warn(
+          "[TrackUserTable] Failed to load superadmin profile for PDF:",
+          e
+        );
+      }
 
       const doc = new jsPDF({
         orientation: "portrait",
         unit: "pt",
         format: "letter",
       });
+
       const hasUnicode = await ensureUnicodeFont(doc);
 
-      const marginX = 40;
-      let cursorY = 40;
+      // 🔹 Load background + icons
+      const [
+        bgDataUrl,
+        adminIcon,
+        addressIcon,
+        phoneIcon,
+        // emailIcon,
+      ] = await Promise.all([
+        loadBgImageAsDataUrl(),
+        loadImageAsDataUrl(ADMIN_ICON_URL),
+        loadImageAsDataUrl(ADDRESS_ICON_URL),
+        loadImageAsDataUrl(PHONE_ICON_URL),
+        // loadImageAsDataUrl(EMAIL_ICON_URL),
+      ]);
 
-      // Title
-      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "bold");
+      const pageSize = doc.internal.pageSize;
+      const pageWidth = pageSize.width || pageSize.getWidth();
+      const pageHeight = pageSize.height || pageSize.getHeight();
+      const centerX = pageWidth / 2;
+
+      // 🔹 Background
+      if (bgDataUrl) {
+        doc.addImage(bgDataUrl, "PNG", 0, 0, pageWidth, pageHeight);
+      }
+
+      const firstPageTop = 158;
+      const otherPagesTop = 72;
+      const marginBottom = 72;
+      const marginX = 40;
+
+      let cursorY = firstPageTop;
+
+      const subtitleHeader = String(subtitle || "").toUpperCase();
+
+      // Date range text (prettified)
+      const dateLabel =
+        prettyFrom || prettyTo
+          ? `${prettyFrom || "—"} to ${prettyTo || "—"}`
+          : "All dates";
+
+      const rangeTxt = `Date range: ${dateLabel}`;
+
+      // Generated on
+      const generatedNow = dayjs();
+      const generatedTxt = `Generated on: ${generatedNow.format(
+        "MMMM D, YYYY h:mm A"
+      )}`;
+
+      // ===== HEADER =====
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
-      doc.text(title, marginX, cursorY);
+      doc.text(title, centerX, cursorY, { align: "center" });
       cursorY += 22;
 
-      // Subtitle
-      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
-      doc.setFontSize(12);
-      doc.text(subtitle, marginX, cursorY);
-      cursorY += 12;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(subtitleHeader, centerX, cursorY, { align: "center" });
+      cursorY += 40;
 
+      doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text(rangeTxt, pageWidth - marginX, cursorY, { align: "right" });
+      cursorY += 14;
+
+      doc.text(generatedTxt, pageWidth - marginX, cursorY, {
+        align: "right",
+      });
+      cursorY += 16;
+
+      // ===== TABLE BODY =====
       const body = (rows || []).map((r) => [
         fmt(r.last_sign_in_at || r.created_at),
         r.role_name ?? "—",
@@ -166,29 +294,93 @@ const TrackUserTable = forwardRef(function TrackUserTable(
         fmt(r.created_at),
       ]);
 
+      const bodySafe = body; // no special symbols here
+
       autoTable(doc, {
         startY: cursorY + 8,
         head: [headers],
-        body,
+        body: bodySafe,
         styles: {
           font: hasUnicode ? FONT_NAME : "helvetica",
           fontSize: 9,
-          cellPadding: 4,
+          cellPadding: 6,
+          minCellHeight: 18,
           halign: "center",
+          textColor: [33, 33, 33],
+
         },
         headStyles: {
+          font: "helvetica",
+          fontSize: 9,
           fillColor: [255, 210, 77],
           textColor: [33, 33, 33],
         },
+        margin: {
+          top: otherPagesTop,
+          bottom: marginBottom,
+          left: marginX,
+          right: marginX,
+        },
         didDrawPage: () => {
-          const pageSize = doc.internal.pageSize;
-          const pageHeight =
-            pageSize.height || pageSize.getHeight();
-          doc.setFontSize(10);
+          const pageSizeInner = doc.internal.pageSize;
+          const pageWidthInner =
+            pageSizeInner.width || pageSizeInner.getWidth();
+          const pageHeightInner =
+            pageSizeInner.height || pageSizeInner.getHeight();
+
+          const footerTopY = pageHeightInner - marginBottom + 16;
+          const pageLabelY = pageHeightInner - marginBottom / 2;
+
+          const iconSize = 12;
+          const iconTextGap = 6;
+          const groupGap = 24;
+
+          doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
+          doc.setFontSize(9);
+
+          const rowY = footerTopY;
+          let x = marginX;
+
+          const drawIconLabel = (icon, label) => {
+            if (!label) return;
+            if (icon) {
+              doc.addImage(
+                icon,
+                "PNG",
+                x,
+                rowY - iconSize + 2,
+                iconSize,
+                iconSize
+              );
+            }
+            const textX = x + (icon ? iconSize + iconTextGap : 0);
+            doc.text(label, textX, rowY);
+            const textWidth = doc.getTextWidth(label);
+            const totalWidth =
+              (icon ? iconSize + iconTextGap : 0) + textWidth + groupGap;
+            x += totalWidth;
+          };
+
+          // 🔹 Superadmin info in one row (same pattern as 1st code)
+          drawIconLabel(adminIcon, `${superadminName}`);
+          drawIconLabel(
+            addressIcon,
+            superadminAddress ? `${superadminAddress}` : ""
+          );
+          drawIconLabel(
+            phoneIcon,
+            superadminContact ? `${superadminContact}` : ""
+          );
+          // drawIconLabel(
+          //   emailIcon,
+          //   superadminEmail ? `${superadminEmail}` : ""
+          // );
+
           doc.text(
             `Page ${doc.getNumberOfPages()}`,
-            marginX,
-            pageHeight - 20
+            pageWidthInner - marginX,
+            pageLabelY,
+            { align: "right" }
           );
         },
       });
@@ -269,6 +461,7 @@ const TrackUserTable = forwardRef(function TrackUserTable(
 });
 
 export default TrackUserTable;
+
 
 
 

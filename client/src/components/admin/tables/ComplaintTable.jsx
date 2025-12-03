@@ -32,6 +32,30 @@ const modalStyle = {
   },
 };
 
+// Style only for the Refund modal (card look)
+const refundModalStyle = {
+  content: {
+    ...modalStyle.content,
+    width: "720px",
+    padding: 0,
+    overflow: "auto",
+    borderRadius: 24,
+  },
+  overlay: modalStyle.overlay,
+};
+
+// 🔸 NEW: small confirm-style modal (same pattern as 2nd code)
+const confirmModalStyle = {
+  content: {
+    ...modalStyle.content,
+    width: 480,
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: 20,
+  },
+  overlay: modalStyle.overlay,
+};
+
 // ---------- Upload helper (your code, JS) ----------
 const guessTypeFromName = (name) => {
   if (!name) return "image/jpeg";
@@ -45,7 +69,12 @@ const guessTypeFromName = (name) => {
 /**
  * Upload an image (by URI) to Supabase Storage and return its public URL.
  */
-async function uploadImageFromUrl(id, img, bucketName = "refund-proofs", folder = "refunds") {
+async function uploadImageFromUrl(
+  id,
+  img,
+  bucketName = "refund-proofs",
+  folder = "refunds"
+) {
   const fileName = img.fileName ?? `proof_${Date.now()}.jpg`;
   const path = `${folder}/${id}/${fileName}`;
 
@@ -95,18 +124,6 @@ const fmtPHDate = (v) => {
     month: "short",
     day: "2-digit",
   });
-};
-
-// Style only for the Refund modal (card look)
-const refundModalStyle = {
-  content: {
-    ...modalStyle.content,
-    width: "720px",
-    padding: 0,
-    overflow: "auto",
-    borderRadius: 24,
-  },
-  overlay: modalStyle.overlay,
 };
 
 /* ===== COPIED BACKEND DATE-RANGE LOGIC (from your FIRST CODE) ===== */
@@ -177,6 +194,9 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
+
+  // 🚨 selection warning modal
+  const [isSelectionWarningOpen, setIsSelectionWarningOpen] = useState(false);
 
   // Data
   const [rows, setRows] = useState([]);
@@ -431,14 +451,34 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
     parseFloat(refundAmount) > 0 &&
     !isConfirming;
 
-  // ===== Listen for Approve/Reject triggers BUT ONLY OPEN IF A CHECKBOX IS SELECTED =====
+  // ===== Listen for Approve/Reject triggers BUT ONLY OPEN IF EXACTLY ONE CHECKBOX IS SELECTED =====
   useEffect(() => {
     const handleOpenRefund = () => {
-      if (selectedItems.length === 0) return;
+      if (selectedItems.length === 0) {
+        // nothing selected
+        return;
+      }
+
+      if (selectedItems.length > 1) {
+        // more than one selected → show warning modal
+        setIsSelectionWarningOpen(true);
+        return;
+      }
+
+      // exactly 1
       setIsRefundOpen(true);
     };
+
     const handleOpenReject = () => {
-      if (selectedItems.length === 0) return;
+      if (selectedItems.length === 0) {
+        return;
+      }
+
+      if (selectedItems.length > 1) {
+        setIsSelectionWarningOpen(true);
+        return;
+      }
+
       setIsRejectOpen(true);
     };
 
@@ -448,7 +488,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
       window.removeEventListener("openRefundModal", handleOpenRefund);
       window.removeEventListener("openRejectModal", handleOpenReject);
     };
-  }, [selectedItems.length]);
+  }, [selectedItems]);
 
   // ========== Reject modal handlers — NOW CALLS RPC ==========
   const confirmReject = useCallback(async () => {
@@ -478,11 +518,10 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
   const canConfirmReject =
     !!(rejectReason && rejectReason.trim().length > 0) && !isRejecting;
 
-  // ✅ NEW: Auto-fill refund amount (eggs only: no delivery, no service)
+  // ✅ Auto-fill refund amount (eggs only: no delivery, no service)
   useEffect(() => {
     if (!isRefundOpen) return;
 
-    // Prefer selected item; fallback to modalData if needed
     const target =
       (selectedItems && selectedItems[0]) ||
       modalData ||
@@ -722,9 +761,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                       <span>Service Fee</span>
                       <span>
                         ₱
-                        {Number(
-                          modalData.serviceFee ?? 0
-                        ).toFixed(2)}
+                        {Number(modalData.serviceFee ?? 0).toFixed(2)}
                       </span>
                     </div>
 
@@ -750,7 +787,8 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
 
                     {/* Refunded Amount (Approved/Refunded) */}
                     {(String(modalData.status).toLowerCase() === "approved" ||
-                      String(modalData.status).toLowerCase() === "refunded") && (
+                      String(modalData.status).toLowerCase() ===
+                        "refunded") && (
                       <div className="flex justify-between text-gray-900 font-extrabold mt-4 border-t pt-3">
                         <span>Refunded Amount</span>
                         <span>
@@ -929,7 +967,7 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
           </div>
         </Modal>
 
-        {/* REJECT MODAL — NOW CALLS RPC */}
+        {/* REJECT MODAL */}
         <Modal
           isOpen={isRejectOpen}
           onRequestClose={() => {
@@ -1003,6 +1041,32 @@ export default function ComplaintTable({ selectedOption, date = "all" }) {
                 }}
               >
                 {isRejecting ? "Rejecting..." : "Confirm Reject"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* 🚨 MULTI-SELECTION WARNING MODAL (now similar to 2nd code) */}
+        <Modal
+          isOpen={isSelectionWarningOpen}
+          onRequestClose={() => setIsSelectionWarningOpen(false)}
+          contentLabel="Selection Warning"
+          style={confirmModalStyle}
+        >
+          <div className="p-6">
+            <h2 className="text-xl font-extrabold text-gray-900">
+              Check only 1 checkbox
+            </h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Please select exactly one refund request by checking only one
+              checkbox before proceeding.
+            </p>
+            <div className="mt-6 flex items-center justify-end">
+              <button
+                onClick={() => setIsSelectionWarningOpen(false)}
+                className="px-4 py-2 rounded-lg bg-primaryYellow text-white font-semibold"
+              >
+                OK
               </button>
             </div>
           </div>

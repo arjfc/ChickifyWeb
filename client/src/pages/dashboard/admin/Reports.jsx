@@ -281,6 +281,7 @@ export default function Reports() {
     "Egg Stock",
     "Egg Production",
     "List of Farmers",
+    "Remittance Records",
   ];
 
   const [selectedOption, setSelectedOption] = useState("Payout History");
@@ -298,7 +299,6 @@ export default function Reports() {
   const handleGenerate = async () => {
     try {
       await tableRef.current?.exportPdf({
-        title: "Chickify Reports",
         subtitle: selectedOption,
         dateFrom,
         dateTo,

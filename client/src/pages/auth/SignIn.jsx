@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import ChickyHero from "../../assets/chickenHero.png";
+import ChickifyLogo from "../../assets/CHICKIFY.png"; // ⬅️ adjust path/name if different
 
 const ROLE_HOME = {
   superadmin: "/super-admin",
@@ -48,15 +49,16 @@ export default function SignIn() {
 
     try {
       // 1) Sign in
-      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error: signInErr } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
       if (signInErr) throw new Error(signInErr.message || "Sign in failed");
 
       // 2) Ensure we actually have the fresh user session
       await ensureUser();
-       const role = await getRoleDirect();
+      const role = await getRoleDirect();
       if (!role || !ROLE_HOME[role]) {
         throw new Error("Your account doesn't have a role yet. Contact support.");
       }
@@ -76,88 +78,98 @@ export default function SignIn() {
     }
   };
 
- return (
+  return (
     <div className="min-h-screen flex items-center justify-center px-4 sm:px-10 md:px-20">
       <div className="flex flex-col md:flex-row items-center justify-center gap-12">
         <form
           onSubmit={handleSubmit}
           className="bg-white rounded-xl shadow-md p-8 sm:p-10 w-full md:w-[720px] lg:w-[550px]
-                     h-[560px] md:h-[620px] lg:h-[500px] flex flex-col overflow-y-auto">
-            <h2 className="text-primaryYellow font-bold text-3xl sm:text-4xl text-center mb-5">
-              Sign In
-            </h2>
+                     h-[560px] md:h-[620px] lg:h-[500px] flex flex-col overflow-y-auto"
+        >
+          <h2 className="text-primaryYellow font-bold text-3xl sm:text-4xl text-center mb-5">
+            Sign In
+          </h2>
 
-            {/* Email */}
-            <div className="flex flex-col gap-1 mb-4">
-              <label className="font-medium text-gray-500 text-sm">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                autoComplete="email"
-                className="border-2 border-darkRed rounded-lg px-3 py-3 w-full text-base"
-              />
+          {/* Email */}
+          <div className="flex flex-col gap-1 mb-4">
+            <label className="font-medium text-gray-500 text-sm">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              autoComplete="email"
+              className="border-2 border-darkRed rounded-lg px-3 py-3 w-full text-base"
+            />
+          </div>
+
+          {/* Password */}
+          <div className="flex flex-col gap-1 mb-4">
+            <label className="font-medium text-gray-500 text-sm">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter Password"
+              autoComplete="current-password"
+              className="border-2 border-darkRed rounded-lg px-3 py-3 w-full text-base"
+            />
+            <div className="flex justify-between text-xs sm:text-sm text-gray-500 mt-4">
+              <label className="flex items-center gap-1">
+                <input type="checkbox" className="accent-yellow-500 h-4 w-4" />
+                Remember Me
+              </label>
+              <a
+                href="#"
+                className="text-primaryYellow hover:underline font-semibold"
+              >
+                Forgot Password?
+              </a>
             </div>
+          </div>
 
-            {/* Password */}
-            <div className="flex flex-col gap-1 mb-4">
-              <label className="font-medium text-gray-500 text-sm">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter Password"
-                autoComplete="current-password"
-                className="border-2 border-darkRed rounded-lg px-3 py-3 w-full text-base"
-              />
-              <div className="flex justify-between text-xs sm:text-sm text-gray-500 mt-4">
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" className="accent-yellow-500 h-4 w-4" />
-                  Remember Me
-                </label>
-                <a href="#" className="text-primaryYellow hover:underline font-semibold">
-                  Forgot Password?
-                </a>
-              </div>
-            </div>
+          {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
 
-            {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="cursor-pointer bg-primaryYellow text-white w-full py-3 rounded-lg font-semibold text-base mb-3 hover:opacity-90 disabled:opacity-60 mt-2"
+          >
+            {loading ? "Signing in…" : "Sign In"}
+          </button>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="cursor-pointer bg-primaryYellow text-white w-full py-3 rounded-lg font-semibold text-base mb-3 hover:opacity-90 disabled:opacity-60 mt-2"
-            >
-              {loading ? "Signing in…" : "Sign In"}
-            </button>
+          <p className="text-xs sm:text-sm text-gray-500 mt-4 text-center leading-snug">
+            By signing in, you agree to Chickify’s{" "}
+            <a href="#" className="text-primaryYellow">
+              Terms
+            </a>{" "}
+            and{" "}
+            <a href="#" className="text-primaryYellow">
+              Privacy
+            </a>
+            .
+          </p>
+        </form>
 
-            {/* <button
-              type="button"
-              onClick={() => alert("Google sign-in not wired yet")}
-              className="bg-softPrimaryYelllow cursor-pointer text-secondaryYellow w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 text-base"
-            >
-              <FaGoogle className="text-lg" /> Continue with Google
-            </button> */}
+       {/* Hero + CHICKIFY image (right side) */}
+<div className="relative w-[420px] h-[560px]">
+  {/* ChickyHero – slightly lower */}
+  <img
+    src={ChickyHero}
+    alt="Chickify Hero"
+    className="absolute top-1 left-1/2 -translate-x-1/2 w-[400px] h-auto"
+  />
 
-            <p className="text-xs sm:text-sm text-gray-500 mt-4 text-center leading-snug">
-              By signing in, you agree to Chickify’s{" "}
-              <a href="#" className="text-primaryYellow">Terms</a> and{" "}
-              <a href="#" className="text-primaryYellow">Privacy</a>.
-            </p>
+  {/* CHICKIFY logo – same size, under hero, a bit to the right */}
+  <img
+    src={ChickifyLogo}
+    alt="Chickify Logo"
+    className="absolute top-[265px] left-[62%] -translate-x-1/2 w-[450px] h-auto"
+  />
+</div>
 
-            {/* Keep or remove this per your preference; SECOND CODE hid it */}
-            {/* <p className="text-center text-sm mt-3">
-              Don’t have an account?{" "}
-              <Link to="/signup" className="text-primaryYellow font-semibold hover:underline">
-                Sign Up
-              </Link>
-            </p> */}
-          </form>
-
-        <img src={ChickyHero} alt="Chickify Hero" className="w-[400px] h-auto self-center" />
       </div>
     </div>
   );

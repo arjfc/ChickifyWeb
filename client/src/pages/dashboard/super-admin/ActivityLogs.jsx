@@ -63,10 +63,7 @@ export default function ActivityLogs() {
     try {
       await activityRef.current?.exportPdf({
         title: "Chickify Activity Logs",
-        subtitle: `${selectedAdminOption} • ${selectedType} • ${buildDateLabel(
-          fromDate,
-          toDate
-        )}`,
+        subtitle: `${selectedAdminOption}`,
         filename: `activity_logs_${selectedAdminOption}_${selectedType}_${
           fromDate || "all"
         }_${toDate || "all"}.pdf`,
@@ -78,21 +75,20 @@ export default function ActivityLogs() {
   };
 
   const handleGenerateSigninsPdf = async () => {
-    try {
-      await signinsRef.current?.exportPdf({
-        title: "Chickify Track Last Sign-ins",
-        subtitle: `${
-          loginRole === "All" ? "All roles" : loginRole
-        } • ${buildDateLabel(loginFromDate, loginToDate)}`,
-        filename: `user_signins_${loginRole}_${
-          loginFromDate || "all"
-        }_${loginToDate || "all"}.pdf`,
-      });
-    } catch (e) {
-      console.error("User Logs PDF export failed:", e);
-      alert("Failed to generate User Logs PDF.");
-    }
-  };
+  try {
+    await signinsRef.current?.exportPdf({
+      title: "Chickify Track Last Sign-ins",
+      subtitle: loginRole === "All" ? "All Roles" : loginRole,
+      filename: `user_signins_${loginRole}_${
+        loginFromDate || "all"
+      }_${loginToDate || "all"}.pdf`,
+    });
+  } catch (e) {
+    console.error("User Logs PDF export failed:", e);
+    alert("Failed to generate User Logs PDF.");
+  }
+};
+
 
   // ===== Reset handlers =====
   const resetActivityFilters = () => {

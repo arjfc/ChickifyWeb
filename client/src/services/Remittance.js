@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
+//ADMIN
 export async function fetchAdminFees() {
   const { data, error } = await supabase.rpc("view_admin_fees");
 
@@ -14,6 +15,7 @@ export async function fetchAdminFees() {
   return { rows, totalFees };
 }
 
+/*** Admin: submit remittance to superadmin. */
 export async function adminSubmitRemittance({ amount, img }) {
   const { data, error } = await supabase.rpc("admin_submit_remittance", {
     p_amount: amount,
@@ -26,7 +28,7 @@ export async function adminSubmitRemittance({ amount, img }) {
   return data?.[0] ?? null;
 }
 
-
+/*** Admin: upload remittance proof image to storage. */
 export async function uploadRemittanceProof(file) {
   if (!file) return null;
 
@@ -56,4 +58,89 @@ export async function fetchAllRemittances() {
     throw error;
   }
   return data || [];
+}
+
+
+/*** Admin: view remittance history of admins → superadmin. */
+export async function fetchAdminRemittanceHistoryy(params = {}) {
+  const { dateFrom = null, dateTo = null } = params;
+
+  const { data, error } = await supabase.rpc(
+    "view_admin_remittance_historyy",
+    {
+      p_date_from: dateFrom || null, // "YYYY-MM-DD" or null
+      p_date_to: dateTo || null,
+      // backend forces auth.uid() as admin, this is just for signature
+      p_admin_id: null,
+    }
+  );
+
+  if (error) {
+    console.error("Error fetching admin remittance historyy:", error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+
+/* Small helper to normalize dates → "YYYY-MM-DD" */
+const toYMD = (d) => {
+  if (!d) return null;
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10); // "YYYY-MM-DD"
+};
+
+/**
+ * Super Admin: view remittance history of admins → superadmin.
+ *
+ * @param {Object} params
+ * @param {string|Date|null} [params.dateFrom] - inclusive start date
+ * @param {string|Date|null} [params.dateTo]   - inclusive end date
+ * @param {string|null} [params.adminId]       - UUID of specific admin (optional)
+ *
+ * @returns {Promise<Array>} rows with:
+ *   remittance_date, coop_name, admin_name, total_remitted,
+ *   payment_method, gcash_name, gcash_number, remitted_to
+ */
+
+export async function fetchAdminRemittanceHistory(params = {}) {
+  const {
+    dateFrom = null,
+    dateTo = null,
+    adminId = null,
+  } = params;
+
+  const { data, error } = await supabase.rpc(
+    "view_admin_remittance_history",
+    {
+      p_date_from: toYMD(dateFrom),
+      p_date_to: toYMD(dateTo),
+      p_admin_id: adminId || null,
+    }
+  );
+
+  if (error) {
+    console.error("view_admin_remittance_history error:", error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+
+/*** Superadmin: view admins with pending remittance to superadmin. */
+export async function fetchAdminsPendingRemittance() {
+  const { data, error } = await supabase.rpc(
+    "view_admins_pending_remittance"
+  );
+
+  if (error) {
+    console.error("Failed to fetch admins pending remittance:", error);
+    throw error;
+  }
+
+  // always return an array
+  return data ?? [];
 }

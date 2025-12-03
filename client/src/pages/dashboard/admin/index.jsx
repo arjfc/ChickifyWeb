@@ -319,9 +319,11 @@ export default function AdminDashboard() {
           </div>
 
           <div className="mt-6">
-            <div className="text-4xl font-extrabold">
-              ₱{Number(remitBalance).toLocaleString()}
-            </div>
+            <div className="text-4xl font-extrabold">₱{Number(remitBalance).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+            })}
+          </div>
             <div className="text-xs text-gray-500 mt-1">
               Based on this month’s cleared sales and ledger rules.
             </div>
