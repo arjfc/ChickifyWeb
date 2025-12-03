@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
+//ADMIN
 export async function fetchAdminFees() {
   const { data, error } = await supabase.rpc("view_admin_fees");
 
@@ -14,6 +15,7 @@ export async function fetchAdminFees() {
   return { rows, totalFees };
 }
 
+/*** Admin: submit remittance to superadmin. */
 export async function adminSubmitRemittance({ amount, img }) {
   const { data, error } = await supabase.rpc("admin_submit_remittance", {
     p_amount: amount,
@@ -26,7 +28,7 @@ export async function adminSubmitRemittance({ amount, img }) {
   return data?.[0] ?? null;
 }
 
-
+/*** Admin: upload remittance proof image to storage. */
 export async function uploadRemittanceProof(file) {
   if (!file) return null;
 
@@ -59,7 +61,7 @@ export async function fetchAllRemittances() {
 }
 
 
-
+/*** Admin: view remittance history of admins → superadmin. */
 export async function fetchAdminRemittanceHistoryy(params = {}) {
   const { dateFrom = null, dateTo = null } = params;
 
@@ -102,6 +104,7 @@ const toYMD = (d) => {
  *   remittance_date, coop_name, admin_name, total_remitted,
  *   payment_method, gcash_name, gcash_number, remitted_to
  */
+
 export async function fetchAdminRemittanceHistory(params = {}) {
   const {
     dateFrom = null,
@@ -124,4 +127,20 @@ export async function fetchAdminRemittanceHistory(params = {}) {
   }
 
   return data || [];
+}
+
+
+/*** Superadmin: view admins with pending remittance to superadmin. */
+export async function fetchAdminsPendingRemittance() {
+  const { data, error } = await supabase.rpc(
+    "view_admins_pending_remittance"
+  );
+
+  if (error) {
+    console.error("Failed to fetch admins pending remittance:", error);
+    throw error;
+  }
+
+  // always return an array
+  return data ?? [];
 }

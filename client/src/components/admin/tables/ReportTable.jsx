@@ -62,7 +62,7 @@ const ReportTable = forwardRef(function ReportTable(
     "List of Farmers": new Set(),
     // ⬇️ NEW
     "Fees Collected": new Set([6]), // amount col
-    "Remittance Records": new Set([1]), // Date(0), Total Remitted(1), Remitted To(2)
+    "Remittance Records": new Set([1]), // total remitted col
   };
 
   /* ======================== Unicode font ======================== */
@@ -300,9 +300,7 @@ const ReportTable = forwardRef(function ReportTable(
           pricePerTray: r.price_per_tray ?? 0,
           totalAmount: r.total_amount ?? 0,
           orderDate: mmddyy(r.order_date),
-          fulfillmentDate: r.fulfillment_date
-            ? mmddyy(r.fulfillment_date)
-            : "—",
+          fulfillmentDate: r.fulfillment_date ? mmddyy(r.fulfillment_date) : "—",
           orderStatus: r.order_status || "—",
           paymentStatus: r.payment_status ?? "—",
         }));
@@ -487,12 +485,12 @@ const ReportTable = forwardRef(function ReportTable(
         if (!alive) return;
         const safe = Array.isArray(rows) ? rows : [];
         const mapped = safe.map((r) => ({
-  fullName: r.full_name || r.name || "—",
-  address: r.address || "—",
-  contactNo: r.contact_no || r.phone || "—",
-  email: r.email || "—",
-  status: r.farmer_status || r.status || "—",
-}));
+          fullName: r.full_name || r.name || "—",
+          address: r.address || "—",
+          contactNo: r.contact_no || r.phone || "—",
+          email: r.email || "—",
+          status: r.farmer_status || r.status || "—",
+        }));
 
         setFarmersRows(mapped);
       } catch (e) {
@@ -529,6 +527,7 @@ const ReportTable = forwardRef(function ReportTable(
         const mapped = safe.map((r) => ({
           date: mmddyy(r.remittance_date),
           totalRemitted: Number(r.total_remitted ?? 0),
+          paymentMethod: r.payment_method || "—", 
           remittedTo: r.remitted_to || "—",
         }));
         setRemitRows(mapped);
@@ -603,7 +602,6 @@ const ReportTable = forwardRef(function ReportTable(
       "Notes",
       "Created",
     ],
-    // ⬇️ UPDATED: Added Email + Status
     "List of Farmers": [
       "Full Name",
       "Address",
@@ -611,7 +609,6 @@ const ReportTable = forwardRef(function ReportTable(
       "Email",
       "Status",
     ],
-    // ⬇️ NEW
     "Fees Collected": [
       "Transaction ID",
       "Order ID",
@@ -621,7 +618,13 @@ const ReportTable = forwardRef(function ReportTable(
       "User Role",
       "Amount",
     ],
-    "Remittance Records": ["Date", "Total Remitted", "Remitted To"],
+    "Remittance Records": [
+      "Date",
+      "Total Remitted",
+      "Mode of Payment", // ⬅️ NEW
+      "Remitted To",
+    
+    ],
   };
 
   /* ======================== paging ======================== */
@@ -710,17 +713,17 @@ const ReportTable = forwardRef(function ReportTable(
             ]
           : eggRows;
       case "List of Farmers":
-  return farmersLoading
-    ? [
-        {
-          fullName: "Loading…",
-          address: "",
-          contactNo: "",
-          email: "",
-          status: "",
-        },
-      ]
-    : farmersRows;
+        return farmersLoading
+          ? [
+              {
+                fullName: "Loading…",
+                address: "",
+                contactNo: "",
+                email: "",
+                status: "",
+              },
+            ]
+          : farmersRows;
       case "Fees Collected":
         return feesLoading
           ? [
@@ -741,6 +744,7 @@ const ReportTable = forwardRef(function ReportTable(
               {
                 date: "Loading…",
                 totalRemitted: "",
+                paymentMethod: "",
                 remittedTo: "",
               },
             ]
@@ -880,7 +884,13 @@ const ReportTable = forwardRef(function ReportTable(
             item.amount,
           ];
         case "Remittance Records":
-          return [item.date, item.totalRemitted, item.remittedTo];
+          return [
+            item.date,
+            item.totalRemitted,
+            item.paymentMethod,
+            item.remittedTo,
+       
+          ];
         default:
           return [];
       }
@@ -1057,10 +1067,17 @@ const ReportTable = forwardRef(function ReportTable(
       cursorY += 16;
 
       const moneyCols = MONEY_COLS[subtitle] || new Set();
-      const columnStyles = {};
-      Array.from(moneyCols).forEach((colIdx) => {
-        columnStyles[colIdx] = { halign: "right" };
-      });
+const columnStyles = {};
+
+Array.from(moneyCols).forEach((colIdx) => {
+  // For Remittance Records → keep Total Remitted (col 1) centered
+  if (subtitle === "Remittance Records" && colIdx === 1) {
+    columnStyles[colIdx] = { halign: "center" }; // 👈 data centered, header untouched
+  } else {
+    columnStyles[colIdx] = { halign: "right" }; // default for other money cols
+  }
+});
+
 
       const bodySafe = rowsForExport;
 
@@ -1107,20 +1124,19 @@ const ReportTable = forwardRef(function ReportTable(
       const isSales = subtitle === "Sales Records";
 
       autoTable(doc, {
-        // first page = cursorY (~158) + header; next pages use margin.top below
         startY: cursorY + 8,
         head: [headers],
         body: bodySafe,
         styles: {
           font: hasUnicode ? FONT_NAME : "helvetica",
-          fontSize: isSales ? 8 : 9, // 👈 body font size: 8 for Sales, 9 for others
+          fontSize: isSales ? 8 : 9,
           cellPadding: 4,
           halign: "center",
           textColor: [33, 33, 33],
         },
         headStyles: {
           font: "helvetica",
-          fontSize: isSales ? 9 : 10, // 👈 header font size: 9 for Sales, 10 for others
+          fontSize: isSales ? 9 : 10,
           fillColor: [255, 210, 77],
           textColor: [33, 33, 33],
         },
@@ -1146,24 +1162,19 @@ const ReportTable = forwardRef(function ReportTable(
           const pageHeightInner =
             pageSizeInner.height || pageSizeInner.getHeight();
 
-          // 🔹 Footer area
           const footerTopY = pageHeightInner - marginBottom + 16;
           const pageLabelY = pageHeightInner - marginBottom / 2;
 
           const iconSize = 12;
           const iconTextGap = 6;
-          const groupGap = 24; // space between each icon+label group
+          const groupGap = 24;
 
-          doc.setFont(
-            hasUnicode ? FONT_NAME : "helvetica",
-            "normal"
-          );
+          doc.setFont(hasUnicode ? FONT_NAME : "helvetica", "normal");
           doc.setFontSize(9);
 
           const rowY = footerTopY;
           let x = marginX;
 
-          // helper: draw one "icon + label" group horizontally
           const drawIconLabel = (icon, label) => {
             if (!label) return;
 
@@ -1187,11 +1198,9 @@ const ReportTable = forwardRef(function ReportTable(
               textWidth +
               groupGap;
 
-            x += totalWidth; // move x for next group
+            x += totalWidth;
           };
 
-          // 🔹 All icons + infos in ONE ROW
-          // drawIconLabel(coopIcon, `Coop: ${coopName}`);
           drawIconLabel(adminIcon, `${adminName}`);
           drawIconLabel(
             addressIcon,
@@ -1201,12 +1210,7 @@ const ReportTable = forwardRef(function ReportTable(
             phoneIcon,
             adminContact ? `${adminContact}` : ""
           );
-          // drawIconLabel(
-          //   emailIcon,
-          //   adminEmail ? `${adminEmail}` : ""
-          // );
 
-          // Page number on the right
           doc.text(
             `Page ${doc.getNumberOfPages()}`,
             pageWidthInner - marginX,
@@ -1358,7 +1362,7 @@ const ReportTable = forwardRef(function ReportTable(
                 </td>
                 <td className="px-3 py-2 text-center">
                   {typeof item.netToCoop === "number"
-                    ? peso(item.netTof)
+                    ? peso(item.netToCoop)
                     : item.netToCoop}
                 </td>
                 <td className="px-3 py-2 text-center">
@@ -1429,30 +1433,30 @@ const ReportTable = forwardRef(function ReportTable(
               </>
             )}
 
-           {selectedOption === "List of Farmers" && (
-  <>
-    <td className="px-3 py-2 text-center font-medium">
-      {item.fullName}
-    </td>
-    <td className="px-3 py-2 text-center">{item.address}</td>
-    <td className="px-3 py-2 text-center">
-      {item.contactNo}
-    </td>
-    <td className="px-3 py-2 text-center">{item.email}</td>
-    <td
-      className={`px-3 py-2 text-center font-medium ${
-        (item.status || "").toLowerCase() === "active"
-          ? "text-green-600"
-          : (item.status || "").toLowerCase() === "inactive"
-          ? "text-red-600"
-          : "text-gray-700"
-      }`}
-    >
-      {item.status}
-    </td>
-  </>
-)}
-
+            {/* List of Farmers */}
+            {selectedOption === "List of Farmers" && (
+              <>
+                <td className="px-3 py-2 text-center font-medium">
+                  {item.fullName}
+                </td>
+                <td className="px-3 py-2 text-center">{item.address}</td>
+                <td className="px-3 py-2 text-center">
+                  {item.contactNo}
+                </td>
+                <td className="px-3 py-2 text-center">{item.email}</td>
+                <td
+                  className={`px-3 py-2 text-center font-medium ${
+                    (item.status || "").toLowerCase() === "active"
+                      ? "text-green-600"
+                      : (item.status || "").toLowerCase() === "inactive"
+                      ? "text-red-600"
+                      : "text-gray-700"
+                  }`}
+                >
+                  {item.status}
+                </td>
+              </>
+            )}
 
             {/* Fees Collected */}
             {selectedOption === "Fees Collected" && (
@@ -1491,8 +1495,12 @@ const ReportTable = forwardRef(function ReportTable(
                     : item.totalRemitted}
                 </td>
                 <td className="px-3 py-2 text-center">
+                  {item.paymentMethod}
+                </td>
+                <td className="px-3 py-2 text-center">
                   {item.remittedTo}
                 </td>
+                
               </>
             )}
           </tr>
