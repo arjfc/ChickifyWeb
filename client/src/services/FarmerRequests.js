@@ -32,6 +32,7 @@ export async function fetchPendingFarmerRequestsForAdmin() {
     requested_at: r.requested_at,
     farmer_name: r.farmer_name,
     farmer_email: r.farmer_email,
+    membership_payment_id: r.membership_payment_id,
   }));
 }
 
@@ -338,6 +339,9 @@ export async function fetchFarmerPermit(farmerId) {
 
   return row;
 }
+
+
+
 
 
 // export async function fetchFarmerDetails(farmerId) {

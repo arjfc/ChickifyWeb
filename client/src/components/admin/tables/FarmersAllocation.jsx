@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { fetchFarmersForAdmin } from "@/services/FarmerRequests";
+import { fetchFarmersForFeedAllocation } from "@/services/FeedMonitoring";
 
 /* ---------- Allocate Modal ---------- */
 function AllocateFromPurchaseModal({ open, onClose, onConfirm, purchase, farmers }) {
@@ -106,7 +106,7 @@ function AllocateFromPurchaseModal({ open, onClose, onConfirm, purchase, farmers
               disabled={over || totalAlloc <= 0}
               onClick={() =>
                 onConfirm?.({
-                  purchaseId: purchase.id,
+                  purchaseId: purchase.purchases?.[0]?.purchase_id || purchase.id, // Use first purchase_id if available
                   allocations: farmers.map((f) => ({
                     farmerId: f.id,
                     kg: Number(amounts[f.id] || 0),
@@ -135,9 +135,11 @@ export default function FarmersAllocation({
   onOpenModal,
   onCloseModal,
   onConfirmAllocate,
-  selectedPurchase
+  selectedPurchase,
+  refreshKey = 0
 }) {
   const [rows, setRows] = useState([]);
+  const [allocationData, setAllocationData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
@@ -146,14 +148,14 @@ export default function FarmersAllocation({
     (async () => {
       try {
         setLoading(true);
-        const data = await fetchFarmersForAdmin({ status: "approved", onlyActive: true });
+        const [farmersData, allocationsData] = await Promise.all([
+          fetchFarmersForFeedAllocation(true),
+          import("../../../services/FeedMonitoring").then(m => m.fetchFeedAllocations())
+        ]);
+        
         if (!active) return;
-        const normalized = (data || []).map((r) => ({
-          id: String(r.farmer_id || r.id),
-          name: r.name,
-          email: r.email,
-        }));
-        setRows(normalized);
+        setRows(farmersData || []);
+        setAllocationData(allocationsData || []);
       } catch (e) {
         if (active) setErr(e?.message || "Failed to load farmers.");
       } finally {
@@ -161,7 +163,7 @@ export default function FarmersAllocation({
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [refreshKey]);
 
   const ids = useMemo(() => rows.map((r) => r.id), [rows]);
   const allChecked = selectedFarmers.size > 0 && selectedFarmers.size === ids.length;
@@ -169,7 +171,7 @@ export default function FarmersAllocation({
 
   const header = "text-[#F6C32B] text-[16px] font-semibold";
   const cell = "text-[16px] text-gray-700 bg-[#faf4df] px-2 py-3";
-  const grid = "grid grid-cols-[60px_1.6fr_1.8fr] items-center";
+  const grid = "grid grid-cols-[60px_1.2fr_1.4fr_1fr_1fr] items-center";
 
   const toggleAll = () => onSelectFarmers(allChecked ? new Set() : new Set(ids));
   const toggleOne = (id) => {
@@ -198,7 +200,7 @@ export default function FarmersAllocation({
             Select Farmers to Allocate Feeds
           </h2>
           <span className="bg-gray-400 text-white text-[12px] font-semibold px-3 py-1 rounded-full">
-            STEP 1
+            STEP 2
           </span>
         </div>
         {selectedFarmers.size > 0 && (
@@ -220,6 +222,8 @@ export default function FarmersAllocation({
         </div>
         <div className={header}>Farmer</div>
         <div className={header}>Email</div>
+        <div className={`${header} text-right`}>Remaining (kg)</div>
+        <div className={`${header} text-center`}>Last Allocation</div>
       </div>
 
       <div className="mx-6 mt-2 border-t-2 border-[#F6C32B]" />
@@ -233,6 +237,14 @@ export default function FarmersAllocation({
 
         {!loading && !err && rows.map((r) => {
           const isSelected = selectedFarmers.has(r.id);
+          // Get remaining kg for the selected feed type only
+          const feedSpecificRemaining = selectedPurchase 
+            ? allocationData.filter(a => 
+                a.farmer === r.name && 
+                a.type === selectedPurchase.name
+              ).reduce((sum, a) => sum + Number(a.remainingKg || 0), 0)
+            : 0;
+          
           return (
             <div 
               key={r.id} 
@@ -255,6 +267,15 @@ export default function FarmersAllocation({
               </div>
               <div className={cell}>{r.name}</div>
               <div className={cell}>{r.email}</div>
+              <div className={`${cell} text-right font-semibold`}>
+                {selectedPurchase 
+                  ? (feedSpecificRemaining > 0 ? `${feedSpecificRemaining.toFixed(1)} kg` : '-')
+                  : (r.totalRemainingKg > 0 ? `${r.totalRemainingKg.toFixed(1)} kg` : '-')
+                }
+              </div>
+              <div className={`${cell} text-center text-sm`}>
+                {r.lastAllocatedAt ? new Date(r.lastAllocatedAt).toLocaleDateString() : '-'}
+              </div>
             </div>
           );
         })}
