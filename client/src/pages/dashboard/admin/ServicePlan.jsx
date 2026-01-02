@@ -1,10 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AddAvailmentModal from "@/components/admin/modals/AddAvailmentModal";
-
-/**
- * UI-FIRST + DB-FRIENDLY MOCK IMPLEMENTATION (JS)
- * - Now includes AddAvailmentModal in separate file
- */
+import EditServicePlanModal from "@/components/admin/modals/EditServicePlanModal";
 
 const PLAN_META = {
   rtl_feeds: {
@@ -35,21 +31,6 @@ function fmtDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString();
-}
-
-function uniqSortedNums(arr) {
-  return Array.from(new Set(arr.filter((n) => Number.isFinite(n)))).sort((a, b) => a - b);
-}
-
-function parseCsvNumbers(s) {
-  return uniqSortedNums(
-    String(s || "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map((x) => Number(x))
-      .filter((n) => Number.isFinite(n) && n > 0)
-  );
 }
 
 /* ----------------------------- Small UI bits ----------------------------- */
@@ -103,33 +84,6 @@ function Select({ label, value, onChange, options, className = "" }) {
         ))}
       </select>
     </label>
-  );
-}
-
-function Modal({ open, title, children, onClose, footer }) {
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose();
-    }
-    if (open) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 p-4">
-          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-          <button className="rounded-lg px-2 py-1 text-sm hover:bg-gray-100" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-        <div className="p-4">{children}</div>
-        {footer ? <div className="border-t border-gray-100 p-4">{footer}</div> : null}
-      </div>
-    </div>
   );
 }
 
@@ -234,45 +188,14 @@ export default function CoopServicePlanPage() {
     });
   }
 
-  /* ----------------------------- Edit modal state (existing) ---------------------------- */
+  // ✅ Edit Service Plan Modal
   const [editOpen, setEditOpen] = useState(false);
-  const [editDefault, setEditDefault] = useState("rtl_feeds");
-  const [editHeadsCsv, setEditHeadsCsv] = useState("45,60,100,120");
-  const [editMonthsCsv, setEditMonthsCsv] = useState("3,6,12,18,24");
-  const [editKgCsv, setEditKgCsv] = useState("25,50,75");
-  const [editErr, setEditErr] = useState(null);
 
-  function openEdit() {
-    setEditErr(null);
-    setEditDefault(plan.default_plan);
-    setEditHeadsCsv(plan.chicken_heads_options.join(","));
-    setEditMonthsCsv(plan.feed_months_options.join(","));
-    setEditKgCsv(plan.feed_kg_options.join(","));
-    setEditOpen(true);
-  }
-
-  function saveEdit() {
-    setEditErr(null);
-
-    const heads = parseCsvNumbers(editHeadsCsv).map((n) => Math.round(n));
-    const months = parseCsvNumbers(editMonthsCsv).map((n) => Math.round(n));
-    const kgs = parseCsvNumbers(editKgCsv);
-
-    if (months.some((m) => m > 24)) return setEditErr("Feed duration options cannot exceed 24 months (2 years).");
-    if (heads.length === 0) return setEditErr("Please provide at least one chicken heads option.");
-    if (months.length === 0) return setEditErr("Please provide at least one feed duration option.");
-    if (kgs.length === 0) return setEditErr("Please provide at least one feed kg option.");
-
+  function handleSavePlan(nextSettings) {
     setPlan((p) => ({
       ...p,
-      default_plan: editDefault,
-      chicken_heads_options: heads,
-      feed_months_options: months,
-      feed_kg_options: kgs,
-      updated_at: new Date().toISOString(),
+      ...nextSettings,
     }));
-
-    setEditOpen(false);
   }
 
   /* ----------------------------- Filters ----------------------------- */
@@ -376,7 +299,7 @@ export default function CoopServicePlanPage() {
             </p>
           </div>
 
-          <Button variant="primary" onClick={openEdit}>
+          <Button variant="primary" onClick={() => setEditOpen(true)}>
             Edit service plan
           </Button>
         </div>
@@ -567,7 +490,7 @@ export default function CoopServicePlanPage() {
           </tbody>
         </Table>
 
-        {/* Footer: Showing + pagination */}
+        {/* Footer */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-gray-600">
             Showing <span className="font-semibold text-gray-900">{showing.from}</span>–{" "}
@@ -602,100 +525,23 @@ export default function CoopServicePlanPage() {
         </div>
       </div>
 
-      {/* EXISTING Edit Modal (unchanged) */}
-      <Modal
+      {/* ✅ Edit Service Plan Modal (separated file) */}
+      <EditServicePlanModal
         open={editOpen}
-        title="Edit Coop Service Plan"
         onClose={() => setEditOpen(false)}
-        footer={
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs text-gray-600">
-              Use comma-separated values. Feed months max is <b>24</b>.
-            </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setEditOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={saveEdit}>
-                Save changes
-              </Button>
-            </div>
-          </div>
-        }
-      >
-        {editErr ? (
-          <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-            {editErr}
-          </div>
-        ) : null}
+        plan={plan}
+        onSave={handleSavePlan}
+      />
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <Select
-            label="Default plan"
-            value={editDefault}
-            onChange={setEditDefault}
-            options={[
-              { value: "rtl_feeds", label: "Chickens (RTL) + Feeds (default)" },
-              { value: "feeds_only", label: "Feeds only" },
-              { value: "rtl_only", label: "Chickens (RTL) only" },
-            ]}
-          />
-
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700">
-            <div className="font-bold">Auto labels</div>
-            <div className="mt-1">12 → 1 year</div>
-            <div>18 → 1.5 years</div>
-            <div>24 → 2 years</div>
-          </div>
-
-          <Input
-            label="Chicken heads options"
-            placeholder="45,60,100"
-            value={editHeadsCsv}
-            onChange={(e) => setEditHeadsCsv(e.target.value)}
-          />
-
-          <Input
-            label="Feed months options (max 24)"
-            placeholder="3,6,12,18,24"
-            value={editMonthsCsv}
-            onChange={(e) => setEditMonthsCsv(e.target.value)}
-          />
-
-          <Input
-            label="Feed kg options"
-            placeholder="25,50,75"
-            value={editKgCsv}
-            onChange={(e) => setEditKgCsv(e.target.value)}
-          />
-
-          <div className="rounded-2xl border border-gray-200 bg-white p-3 text-sm">
-            <div className="font-bold text-gray-900">Preview</div>
-            <div className="mt-2 text-gray-700 space-y-1">
-              <div>
-                <b>Default:</b> {PLAN_META[editDefault]?.title}
-              </div>
-              <div>
-                <b>Heads:</b> {parseCsvNumbers(editHeadsCsv).join(", ") || "—"}
-              </div>
-              <div>
-                <b>Feed durations:</b>{" "}
-                {parseCsvNumbers(editMonthsCsv).map(monthsLabel).join(", ") || "—"}
-              </div>
-              <div>
-                <b>Feed kg:</b> {parseCsvNumbers(editKgCsv).join(", ") || "—"}
-              </div>
-            </div>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ✅ New Add Availment Modal */}
+      {/* ✅ Add Availment Modal (already separated file) */}
       <AddAvailmentModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onAdd={handleAddAvailment}
         adminId={plan.admin_id}
+        chickenHeadsOptions={plan.chicken_heads_options}
+        feedMonthsOptions={plan.feed_months_options}
+        feedKgOptions={plan.feed_kg_options}
         feedTypeOptions={feedTypeOptions}
       />
     </div>
