@@ -3,7 +3,14 @@
 // Icons
 import { FiSettings } from "react-icons/fi";
 import { CiGrid42 } from "react-icons/ci";
-import { LuUserCog, LuClock2, LuReceipt, LuMessageCircleMore,LuStar} from "react-icons/lu";
+import {
+  LuUserCog,
+  LuClock2,
+  LuReceipt,
+  LuMessageCircleMore,
+  LuStar,
+  LuPackage,
+} from "react-icons/lu";
 import { RiShoppingBag3Line } from "react-icons/ri";
 import { GrBasket } from "react-icons/gr";
 import { TbCoins } from "react-icons/tb";
@@ -122,11 +129,11 @@ export const sidebarItems = [
       { label: "Expense", path: { admin: "/admin/expenses/expense" } },
     ],
   },
-  //   {
-  //   label: "Expenses",
-  //   icon: TbCoins,
-  //   roles: ["admin"],
-  //   path: { admin: "/admin/expenses/expense" } },
+    {
+    label: "Service Plan",
+    icon: LuPackage,
+    roles: ["admin"],
+    path: { admin: "/admin/service-plan" } },
   {
     label: "Order Status",
     path: { admin: "/admin/order-status" },

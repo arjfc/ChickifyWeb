@@ -15,7 +15,9 @@ export { default as OrderStatus } from "./dashboard/admin/OrderStatus"
 export { default as Complaints } from "./dashboard/admin/Complaints"
 export { default as PayoutRequest } from "./dashboard/admin/PayoutRequest"
 export { default as AdminReports } from "./dashboard/admin/Reports"
+export { default as ServicePlan } from "./dashboard/admin/ServicePlan"
 export { default as AdminSettings } from "./dashboard/admin/Settings"
+
 
     // Super-Admin
 export { default as SuperAdminDashboard } from "./dashboard/super-admin"; 

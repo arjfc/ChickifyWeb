@@ -499,6 +499,7 @@ export default function DashboardLayout() {
     "/admin/settings": "Account Settings",
     "/admin/price-forecast-analysis": "Price Forecast Analysis",
     "/admin/reviews": "Reviews",
+    "/admin/service-plan": "Service Plan",
 
   };
 

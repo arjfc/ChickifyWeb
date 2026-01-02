@@ -12,7 +12,7 @@ import {
   PricingManagement, ActivityLogs, Reports, Settings,
   // Admin
   AdminDashboard, AdminUserManagement, ProductDetails, DiscountManagement,
-  OrderStatus, Complaints, PayoutRequest, AdminReports, AdminSettings} from "./pages";
+  OrderStatus, Complaints, PayoutRequest, AdminReports, ServicePlan ,AdminSettings} from "./pages";
 import SuperAdminUserView from "./components/super-admin/users/ViewAdmin";
 import SuperAdminUserEdit from "./components/super-admin/users/EditAdmin";
 import AdminUserView from "./components/admin/users/ViewAdmin";
@@ -102,6 +102,8 @@ export default function App() {
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="price-forecast-analysis" element={<PriceForecastAnalysis />}/>
               <Route path="reviews" element={<Reviews/>}/>
+              <Route path="service-plan" element={<ServicePlan/>}/>
+
 
 
             </Route>
