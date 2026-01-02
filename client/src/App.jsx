@@ -12,7 +12,7 @@ import {
   PricingManagement, ActivityLogs, Reports, Settings,
   // Admin
   AdminDashboard, AdminUserManagement, ProductDetails, DiscountManagement,
-  OrderStatus, Complaints, PayoutRequest, AdminReports, ServicePlan ,AdminSettings} from "./pages";
+  OrderStatus, Complaints, PayoutRequest, AdminReports, ServicePlan, CoopContract ,AdminSettings} from "./pages";
 import SuperAdminUserView from "./components/super-admin/users/ViewAdmin";
 import SuperAdminUserEdit from "./components/super-admin/users/EditAdmin";
 import AdminUserView from "./components/admin/users/ViewAdmin";
@@ -72,6 +72,7 @@ export default function App() {
               <Route path="activity-logs" element={<ActivityLogs />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="settings" element={<Settings />} />
               <Route path="notifications" element={<NotificationsPage />} />
 
             </Route>
@@ -103,6 +104,7 @@ export default function App() {
               <Route path="price-forecast-analysis" element={<PriceForecastAnalysis />}/>
               <Route path="reviews" element={<Reviews/>}/>
               <Route path="service-plan" element={<ServicePlan/>}/>
+              <Route path="contract" element={<CoopContract/>} />          
 
 
 

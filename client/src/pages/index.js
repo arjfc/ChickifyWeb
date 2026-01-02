@@ -16,6 +16,7 @@ export { default as Complaints } from "./dashboard/admin/Complaints"
 export { default as PayoutRequest } from "./dashboard/admin/PayoutRequest"
 export { default as AdminReports } from "./dashboard/admin/Reports"
 export { default as ServicePlan } from "./dashboard/admin/ServicePlan"
+export { default as CoopContract } from "./dashboard/admin/CoopContract"
 export { default as AdminSettings } from "./dashboard/admin/Settings"
 
 

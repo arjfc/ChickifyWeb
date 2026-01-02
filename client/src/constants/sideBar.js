@@ -164,6 +164,14 @@ export const sidebarItems = [
     icon: LuStar,
     roles: ["admin"],
   },
+  {
+    label: "Contract",
+    path: {admin: "/admin/contract"},
+    icon: LuStar,
+    roles: ["admin"]
+
+  },
+  
   
 
   // Shared

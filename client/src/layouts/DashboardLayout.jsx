@@ -500,7 +500,7 @@ export default function DashboardLayout() {
     "/admin/price-forecast-analysis": "Price Forecast Analysis",
     "/admin/reviews": "Reviews",
     "/admin/service-plan": "Service Plan",
-
+    "/admin/contract": "Contract",
   };
 
   const excludedPaths = [
