@@ -22,30 +22,40 @@ export const sidebarItems = [
 
   // ---- User Management (split) ----
   // Super Admin: dropdown with children
+  // {
+  //   label: "User Management",
+  //   icon: LuUserCog,
+  //   roles: ["super-admin"],
+  //   children: [
+  //     {
+  //       label: "Manage Users",
+  //       path: { "super-admin": "/super-admin/users" },
+  //       roles: ["super-admin"],
+  //     },
+  //     // {
+  //     //   label: "Suspicious Activities",
+  //     //   path: { "super-admin": "/super-admin/suspicious-activities" },
+  //     //   roles: ["super-admin"],
+  //     // },
+  //   ],
+  // },
+
   {
-    label: "User Management",
-    icon: LuUserCog,
-    roles: ["super-admin"],
-    children: [
-      {
-        label: "Manage Users",
-        path: { "super-admin": "/super-admin/users" },
-        roles: ["super-admin"],
-      },
-      // {
-      //   label: "Suspicious Activities",
-      //   path: { "super-admin": "/super-admin/suspicious-activities" },
-      //   roles: ["super-admin"],
-      // },
-    ],
+  label: "User Management",
+  icon: LuUserCog,
+  roles: ["super-admin", "admin"],  // 👈 both can see it
+  path: {
+    "super-admin": "/super-admin/users",
+    admin: "/admin/users",
   },
-  // Admin: single link (no dropdown)
-  {
-    label: "User Management",
-    path: { admin: "/admin/users" },
-    icon: LuUserCog,
-    roles: ["admin"],
-  },
+},
+  // // Admin: single link (no dropdown)
+  // {
+  //   label: "User Management",
+  //   path: { admin: "/admin/users" },
+  //   icon: LuUserCog,
+  //   roles: ["admin"], 
+  // },
 
   // Super Admin only
   // {
