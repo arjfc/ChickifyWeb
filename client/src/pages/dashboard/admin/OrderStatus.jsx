@@ -129,6 +129,9 @@ export default function OrderStatus() {
   // selected driver for trucking
   const [selectedDriverId, setSelectedDriverId] = useState(null);
 
+  // meta for selected orders (so we know shipping_mode per order)
+  const [selectedOrdersMeta, setSelectedOrdersMeta] = useState({});
+
   const reloadCounts = async () => {
     setLoadingCounts(true);
     try {
@@ -165,13 +168,24 @@ export default function OrderStatus() {
     loadDrivers();
   }, [selectedTab]);
 
-  // selection per tab
+  // selection mode per tab
   const selectionMode = useMemo(() => {
     if (selectedTab === "Confirmed") return "multi";
     if (selectedTab === "To Ship") return "single";
     if (selectedTab === "Shipped") return "multi";
     return "none";
   }, [selectedTab]);
+
+  // Do we need a driver for the current selection?
+  // -> yes if ANY selected order has shipping_mode = 'delivery'
+  const needsDriver = useMemo(() => {
+    if (selectedTab !== "Shipped" || !selectedIds.length) return false;
+
+    return selectedIds.some((id) => {
+      const meta = selectedOrdersMeta[String(id)];
+      return meta?.shipping_mode === "delivery";
+    });
+  }, [selectedTab, selectedIds, selectedOrdersMeta]);
 
   // Confirmed -> To Ship
   const [marking, setMarking] = useState(false);
@@ -186,14 +200,20 @@ export default function OrderStatus() {
 
       if (failed.length) {
         console.error("[To Ship] failures:", failed);
-        const msgLines = failed.map((f, idx) => `• Order #${selectedIds[idx]} failed.`);
+        const msgLines = failed.map(
+          (f, idx) => `• Order #${selectedIds[idx]} failed.`
+        );
         showToast(
           `${msgLines.join("\n")}\n\nOthers were updated successfully.`,
           "error",
           "Some orders failed"
         );
       } else {
-        showToast("Selected orders marked as To Ship.", "success", "Status updated");
+        showToast(
+          "Selected orders marked as To Ship.",
+          "success",
+          "Status updated"
+        );
       }
 
       await reloadCounts();
@@ -210,10 +230,10 @@ export default function OrderStatus() {
   const onMarkDelivered = async () => {
     if (selectedTab !== "Shipped" || !selectedIds.length) return;
 
-    // require driver selection so trucking inserts
-    if (!selectedDriverId) {
+    // only require driver if we actually have delivery orders
+    if (needsDriver && !selectedDriverId) {
       showToast(
-        "• Please select a driver in the trucking table before marking orders as Delivered.",
+        "• Please select a driver in the trucking table before marking delivery orders as Delivered.",
         "warning",
         "Driver required"
       );
@@ -223,7 +243,8 @@ export default function OrderStatus() {
     setDelivering(true);
     try {
       const results = await adminMarkManyDeliveredDetailed(selectedIds, {
-        trackingProfileId: selectedDriverId,
+        // for pickup-only selections this can be null
+        trackingProfileId: needsDriver ? selectedDriverId : null,
       });
 
       console.groupCollapsed("[Deliver] Batch delivery results");
@@ -302,11 +323,14 @@ export default function OrderStatus() {
     selectionMode === "multi" && selectedIds.length > 0
   );
 
-  // disable deliver if no driver selected
+  // Deliver disabled if:
+  // - not in Shipped tab, or
+  // - no selected orders, or
+  // - we need a driver (delivery orders) but no driver selected
   const isDeliverDisabled = !(
     selectedTab === "Shipped" &&
     selectedIds.length > 0 &&
-    selectedDriverId
+    (!needsDriver || selectedDriverId)
   );
 
   // allocation (To Ship flow)
@@ -338,6 +362,7 @@ export default function OrderStatus() {
                 onClick={() => {
                   setSelectedTab(label);
                   setSelectedIds([]);
+                  setSelectedOrdersMeta({});
                 }}
                 className={`relative cursor-pointer rounded-xl pl-4 pr-8 py-2 text-sm sm:text-base transition-colors ${
                   active
@@ -385,8 +410,8 @@ export default function OrderStatus() {
                   : "bg-primaryYellow text-white hover:opacity-90"
               }`}
               title={
-                !selectedDriverId
-                  ? "Select a driver in the trucking table first"
+                needsDriver && !selectedDriverId
+                  ? "Select a driver in the trucking table first (required for delivery orders)"
                   : "Mark selected orders as Delivered"
               }
             >
@@ -396,9 +421,7 @@ export default function OrderStatus() {
         </div>
       </div>
 
-      {countsErr && (
-        <div className="text-sm text-red-600">{countsErr}</div>
-      )}
+      {countsErr && <div className="text-sm text-red-600">{countsErr}</div>}
 
       {/* Orders table */}
       <div className="p-4 sm:p-6 rounded-lg border border-gray-200 shadow-lg overflow-x-auto">
@@ -408,7 +431,26 @@ export default function OrderStatus() {
           selectedOption={mapStatusForDB(selectedTab)}
           mode={selectionMode}
           selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
+          // IMPORTANT: pass back both IDs and row meta (with shipping_mode)
+          onSelectionChange={(ids, rowsMeta) => {
+            setSelectedIds(ids || []);
+
+            // build a map: { [order_id]: row }
+            if (Array.isArray(rowsMeta)) {
+              const map = {};
+              rowsMeta.forEach((row) => {
+                if (!row) return;
+                const key = String(row.id ?? row.order_id);
+                map[key] = row;
+              });
+              setSelectedOrdersMeta(map);
+            } else if (rowsMeta && typeof rowsMeta === "object") {
+              // if OrderTable already passes a ready-made map
+              setSelectedOrdersMeta(rowsMeta);
+            } else {
+              setSelectedOrdersMeta({});
+            }
+          }}
         />
       </div>
 

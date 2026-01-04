@@ -32,6 +32,7 @@ export async function fetchPendingFarmerRequestsForAdmin() {
     requested_at: r.requested_at,
     farmer_name: r.farmer_name,
     farmer_email: r.farmer_email,
+    membership_payment_id: r.membership_payment_id,
   }));
 }
 
@@ -185,26 +186,31 @@ export async function rejectFarmerRequest(row, reason) {
  * List farmers under this coop (admin_view_decisions)
  * Defaults: status='approved', onlyActive=true
  * =======================================================*/
-export async function fetchFarmersForAdmin({
-  status = "approved",
-  onlyActive = true,
-} = {}) {
+export async function fetchFarmersForAdmin(
+  {
+    // kept params for compatibility, but they are no longer used
+    status = "approved",
+    onlyActive = true,
+  } = {}
+) {
   const adminId = await getCurrentUserId();
-  const { data, error } = await supabase.rpc("admin_view_decisions", {
-    adminid: adminId,
-    status,
-    onlyactive: onlyActive,
-  });
+
+  const { data, error } = await supabase.rpc(
+    "admin_fetch_active_farmers",
+    { p_admin_id: adminId }
+  );
+
   if (error) throw error;
 
   return (data || []).map((r) => ({
-    id: r.id,
+    id: r.farmer_id,            
     farmer_id: r.farmer_id,
     name: r.farmer_name || r.farmer_id,
     email: r.farmer_email || "—",
-    status: r.status,
-    since: r.requested_at,
-    ended_at: r.ended_at,
+    is_active: !!r.is_active,   
+    status: r.is_active ? "approved" : "inactive",
+    since: r.approved_at,         // from RPC
+    ended_at: null,               // not applicable anymore
   }));
 }
 
@@ -333,6 +339,9 @@ export async function fetchFarmerPermit(farmerId) {
 
   return row;
 }
+
+
+
 
 
 // export async function fetchFarmerDetails(farmerId) {

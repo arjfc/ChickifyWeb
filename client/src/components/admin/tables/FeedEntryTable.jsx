@@ -1,8 +1,8 @@
 //FeedEntryTable.jsx
 import React, { useEffect, useState, useMemo } from "react";
-import { IoAdd, IoSearchOutline } from "react-icons/io5";
+import { IoAdd, IoSearchOutline, IoPencil } from "react-icons/io5";
 import { listMyFeedTypes } from "../../../services/FeedEntry";
-export default function FeedEntryTable({ refreshKey = 0, onAddClick }) {
+export default function FeedEntryTable({ refreshKey = 0, onAddClick, onEditClick }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -150,6 +150,9 @@ export default function FeedEntryTable({ refreshKey = 0, onAddClick }) {
         <div className={`flex-1 ${header}`}>Name</div>
         <div className={`w-48 ${header}`}>Brand</div>
         <div className={`w-40 ${header}`}>Form</div>
+        <div className={`w-32 ${header}`}>Price/Kg</div>
+        <div className={`w-32 ${header}`}>Pack Size</div>
+        <div className={`w-20 ${header}`}>Actions</div>
       </div>
 
       {/* Table Body */}
@@ -178,6 +181,21 @@ export default function FeedEntryTable({ refreshKey = 0, onAddClick }) {
               <div className={`flex-1 ${cell}`}>{row.name}</div>
               <div className={`w-48 ${cell}`}>{row.brand || "—"}</div>
               <div className={`w-40 ${cell}`}>{row.form || "—"}</div>
+              <div className={`w-32 ${cell}`}>
+                {row.current_price_per_kg ? `₱${parseFloat(row.current_price_per_kg).toFixed(2)}` : "—"}
+              </div>
+              <div className={`w-32 ${cell}`}>
+                {row.pack_size_kg ? `${parseFloat(row.pack_size_kg)} kg` : "—"}
+              </div>
+              <div className={`w-20 ${cell}`}>
+                <button
+                  onClick={() => onEditClick?.(row)}
+                  className="p-1.5 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
+                  title="Edit feed type"
+                >
+                  <IoPencil className="text-sm" />
+                </button>
+              </div>
             </div>
           ))
         )}

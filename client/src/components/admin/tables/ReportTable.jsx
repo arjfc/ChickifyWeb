@@ -1,7 +1,7 @@
 // components/admin/tables/ReportTable.jsx
 "use client";
 import React, {
-  useEffect,
+useEffect,
   useMemo,
   useState,
   forwardRef,

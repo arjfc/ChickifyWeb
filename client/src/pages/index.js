@@ -15,7 +15,15 @@ export { default as OrderStatus } from "./dashboard/admin/OrderStatus"
 export { default as Complaints } from "./dashboard/admin/Complaints"
 export { default as PayoutRequest } from "./dashboard/admin/PayoutRequest"
 export { default as AdminReports } from "./dashboard/admin/Reports"
+export { default as ServicePlan } from "./dashboard/admin/ServicePlan"
+export { default as CoopContract } from "./dashboard/admin/CoopContract"
+export { default as FeedGuide } from "./dashboard/admin/FeedGuide"
+export { default as CageManagement } from "./dashboard/admin/CageManagement"
+export { default as AllAboutEggs } from "./dashboard/admin/AllAboutEggs"
+export { default as HensHealth } from "./dashboard/admin/HensHealth"
 export { default as AdminSettings } from "./dashboard/admin/Settings"
+
+
 
     // Super-Admin
 export { default as SuperAdminDashboard } from "./dashboard/super-admin"; 

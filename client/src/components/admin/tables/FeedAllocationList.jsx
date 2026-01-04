@@ -1,4 +1,4 @@
-// import React, { useEffect, useMemo, useState } from "react";
+// amazonq-ignore-next-line// import React, { useEffect, useMemo, useState } from "react";
 // import { IoSearchOutline } from "react-icons/io5";
 // import { fetchFeedPurchases } from "@/services/feedmonitoring";
 
@@ -121,10 +121,10 @@
 //   );
 // }
 import React, { useEffect, useMemo, useState } from "react";
-import { IoSearchOutline } from "react-icons/io5";
+import { IoSearchOutline, IoAdd, IoPencil } from "react-icons/io5";
 import { fetchFeedPurchases } from "@/services/feedmonitoring";
 
-export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseId, refreshKey = 0 }) {
+export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseId, refreshKey = 0, onAddPurchase, onEditPurchase }) {
   const [q, setQ] = useState("");
   const [rowsRaw, setRowsRaw] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -164,7 +164,7 @@ export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseI
 
   const header = "text-[#F6C32B] text-[16px] font-semibold";
   const cell = "text-[16px] text-gray-700 bg-[#faf4df] px-2 py-3";
-  const grid = "grid grid-cols-[60px_1.1fr_1fr_1fr_1fr] items-center";
+  const grid = "grid grid-cols-[60px_1.1fr_1fr_1fr_1fr_80px] items-center";
 
   return (
     <div className="rounded-lg bg-white border border-gray-300 shadow-sm">
@@ -174,18 +174,28 @@ export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseI
             Select Feed Purchase
           </h2>
           <span className="bg-gray-400 text-white text-[12px] font-semibold px-3 py-1 rounded-full">
-            STEP 2
+            STEP 1
           </span>
         </div>
-        <div className="relative">
-          <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]" />
-          <input
-            type="text"
-            placeholder="Search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="h-9 w-[240px] pl-9 pr-3 rounded-lg border border-gray-300 bg-gray-50 text-[14px] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]" />
+            <input
+              type="text"
+              placeholder="Search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="h-9 w-[240px] pl-9 pr-3 rounded-lg border border-gray-300 bg-gray-50 text-[14px] focus:outline-none focus:ring-2 focus:ring-yellow-300"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onAddPurchase}
+            className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#F6C32B] text-white text-sm font-semibold hover:opacity-90 transition-all"
+          >
+            <IoAdd className="text-lg" />
+            Add Purchase
+          </button>
         </div>
       </div>
 
@@ -195,6 +205,7 @@ export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseI
         <div className={header}>Brand</div>
         <div className={header}>Form</div>
         <div className={`${header} text-right`}>Amount (kg)</div>
+        <div className={`${header} text-center`}>Actions</div>
       </div>
 
       <div className="mx-6 mt-2 border-t-2 border-[#F6C32B]" />
@@ -231,7 +242,30 @@ export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseI
               <div className={cell}>{r.name}</div>
               <div className={cell}>{r.brand}</div>
               <div className={cell}>{r.form}</div>
-              <div className={`${cell} text-right font-semibold`}>{r.amountKg}</div>
+              <div className={`${cell} text-right font-semibold`}>{Number(r.amountKg).toFixed(2)}</div>
+              <div className={`${cell} flex items-center justify-center`}>
+                {(() => {
+                  // amazonq-ignore-next-line
+                  const hasAllocations = Number(r.amountKg) < Number(r.feed_type_id); // This logic needs to be updated based on your data structure
+                  return (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditPurchase?.(r);
+                      }}
+                      disabled={hasAllocations}
+                      className={`p-2 rounded-lg transition-all ${
+                        hasAllocations 
+                          ? 'text-gray-400 cursor-not-allowed' 
+                          : 'text-gray-600 hover:text-[#F6C32B] hover:bg-yellow-100'
+                      }`}
+                      title={hasAllocations ? "Cannot edit - has allocations" : "Edit Purchase"}
+                    >
+                      <IoPencil className="text-lg" />
+                    </button>
+                  );
+                })()}
+              </div>
             </div>
           );
         })}

@@ -499,6 +499,12 @@ export default function DashboardLayout() {
     "/admin/settings": "Account Settings",
     "/admin/price-forecast-analysis": "Price Forecast Analysis",
     "/admin/reviews": "Reviews",
+    "/admin/service-plan": "Service Plan",
+    "/admin/contract": "Contract",
+    "/admin/feeds": "Feeds",
+    "/admin/cagemanagement": "Cage Management",
+    "/admin/allabouteggs": "All About Eggs",
+    "/admin/henshealth": "Hen's Health",
 
   };
 

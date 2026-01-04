@@ -1,9 +1,17 @@
 // src/constants/sidebar.js
 
 // Icons
-import { FiSettings } from "react-icons/fi";
+import { FiSettings, FiBookOpen } from "react-icons/fi";
 import { CiGrid42 } from "react-icons/ci";
-import { LuUserCog, LuClock2, LuReceipt, LuMessageCircleMore,LuStar} from "react-icons/lu";
+import {
+  LuUserCog,
+  LuClock2,
+  LuReceipt,
+  LuMessageCircleMore,
+  LuStar,
+  LuPackage,
+  LuFileText,
+} from "react-icons/lu";
 import { RiShoppingBag3Line } from "react-icons/ri";
 import { GrBasket } from "react-icons/gr";
 import { TbCoins } from "react-icons/tb";
@@ -32,30 +40,30 @@ export const sidebarItems = [
   //       path: { "super-admin": "/super-admin/users" },
   //       roles: ["super-admin"],
   //     },
-  //     // {
-  //     //   label: "Suspicious Activities",
-  //     //   path: { "super-admin": "/super-admin/suspicious-activities" },
-  //     //   roles: ["super-admin"],
-  //     // },
+      // {
+      //   label: "Suspicious Activities",
+      //   path: { "super-admin": "/super-admin/suspicious-activities" },
+      //   roles: ["super-admin"],
+      // },
   //   ],
   // },
-
-  {
-  label: "User Management",
-  icon: LuUserCog,
-  roles: ["super-admin", "admin"],  // 👈 both can see it
-  path: {
-    "super-admin": "/super-admin/users",
-    admin: "/admin/users",
-  },
-},
   // // Admin: single link (no dropdown)
   // {
   //   label: "User Management",
   //   path: { admin: "/admin/users" },
   //   icon: LuUserCog,
-  //   roles: ["admin"], 
+  //   roles: ["admin"],
   // },
+
+  {
+  label: "User Management",
+  icon: LuUserCog,
+  roles: ["super-admin", "admin"], 
+  path: {
+    "super-admin": "/super-admin/users",
+    admin: "/admin/users",
+  },
+} ,
 
   // Super Admin only
   // {
@@ -108,27 +116,71 @@ export const sidebarItems = [
       // },
     ],
   },
-  // {
-  //   label: "Expenses",
-  //   icon: TbCoins,
-  //   roles: ["admin"],
-  //   children: [
-  //     {
-  //       label: "Feed Monitoring",
-  //       path: { admin: "/admin/expenses/feed-monitoring" },
-  //     },
-  //     { label: "Feed Entry", path: { admin: "/admin/expenses/feed-entry" } },
-  //     // { label: "Business",        path: { admin: "/admin/expenses/business" } },
-  //     { label: "Expense", path: { admin: "/admin/expenses/expense" } },
-  //   ],
-  // },
-    {
+  {
     label: "Expenses",
     icon: TbCoins,
     roles: ["admin"],
-    path: { admin: "/admin/expenses/expense" } },
+    children: [
+      {
+        label: "Feed Monitoring",
+        path: { admin: "/admin/expenses/feed-monitoring" },
+      },
+      { label: "Feed Entry", path: { admin: "/admin/expenses/feed-entry" } },
+      // { label: "Business",        path: { admin: "/admin/expenses/business" } },
+      { label: "Expense", path: { admin: "/admin/expenses/expense" } },
+    ],
+  },
+    {
+    label: "Service Plan",
+    icon: LuPackage,
+    roles: ["admin"],
+    path: { admin: "/admin/service-plan" } },
   
+  
+  //shared
   {
+  label: "Poultry Guide",
+  icon: FiBookOpen, // or keep your preferred icon
+  roles: ["super-admin", "admin"],
+  children: [
+    {
+      label: "Feeds",
+      path: {
+        "super-admin": "/super-admin/feeds",
+        admin: "/admin/feeds",
+      },
+      roles: ["super-admin", "admin"],
+    },
+    {
+      label: "All About Eggs",
+      path: {
+        "super-admin": "/super-admin/egg-handling",
+        admin: "/admin/allabouteggs",
+      },
+      roles: ["super-admin", "admin"],
+    },
+    {
+      label: "Cage Management",
+      path: {
+        "super-admin": "/super-admin/environment",
+        admin: "/admin/cagemanagement",
+      },
+      roles: ["super-admin", "admin"],
+    },
+    {
+      label: "Hen's Health",
+      path: {
+        "super-admin": "/super-admin/hens-health",
+        admin: "/admin/henshealth",
+      },
+      roles: ["super-admin", "admin"],
+    },
+  ],
+},
+  
+  
+  
+    {
     label: "Order Status",
     path: { admin: "/admin/order-status" },
     icon: GrBasket,
@@ -158,6 +210,14 @@ export const sidebarItems = [
     icon: LuStar,
     roles: ["admin"],
   },
+  {
+    label: "Contract",
+    path: {admin: "/admin/contract"},
+    icon: LuFileText,
+    roles: ["admin"]
+  },
+
+
   
 
   // Shared
@@ -179,6 +239,12 @@ export const sidebarItems = [
     icon: FiSettings,
     roles: ["super-admin", "admin"],
   },
+
+
+
+
+
+
 ];
 
 export default sidebarItems;
