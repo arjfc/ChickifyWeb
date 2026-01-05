@@ -181,10 +181,18 @@ export default function OrderStatus() {
   const needsDriver = useMemo(() => {
     if (selectedTab !== "Shipped" || !selectedIds.length) return false;
 
-    return selectedIds.some((id) => {
+    const result = selectedIds.some((id) => {
       const meta = selectedOrdersMeta[String(id)];
-      return meta?.shipping_mode === "delivery";
+      const mode = meta?.shipping_mode;
+      return mode === "delivery" || mode === "Delivery";
     });
+
+    console.log("[OrderStatus] needsDriver?", result, {
+      selectedIds,
+      selectedOrdersMeta,
+    });
+
+    return result;
   }, [selectedTab, selectedIds, selectedOrdersMeta]);
 
   // Confirmed -> To Ship
@@ -219,6 +227,7 @@ export default function OrderStatus() {
       await reloadCounts();
       bumpReload();
       setSelectedIds([]);
+      setSelectedOrdersMeta({});
       setSelectedTab("To Ship");
     } finally {
       setMarking(false);
@@ -232,10 +241,16 @@ export default function OrderStatus() {
 
     // only require driver if we actually have delivery orders
     if (needsDriver && !selectedDriverId) {
+      // 🔔 Alert popup when shipping mode is delivery but no driver selected
+      window.alert(
+        "These orders use delivery.\n\nPlease select a driver in the trucking table before marking them as Delivered."
+      );
+
+      // Toast for consistent UI
       showToast(
-        "• Please select a driver in the trucking table before marking delivery orders as Delivered.",
+        "Select a driver in the trucking table before delivering orders with shipping mode = delivery.",
         "warning",
-        "Driver required"
+        "Driver required for delivery"
       );
       return;
     }
@@ -287,6 +302,7 @@ export default function OrderStatus() {
       await reloadCounts();
       bumpReload();
       setSelectedIds([]);
+      setSelectedOrdersMeta({});
       setSelectedTab(failures.length ? "Shipped" : "Delivered");
     } finally {
       setDelivering(false);
@@ -323,14 +339,10 @@ export default function OrderStatus() {
     selectionMode === "multi" && selectedIds.length > 0
   );
 
-  // Deliver disabled if:
-  // - not in Shipped tab, or
-  // - no selected orders, or
-  // - we need a driver (delivery orders) but no driver selected
+  // Deliver button is enabled in Shipped tab when there are selected orders.
+  // (Driver requirement is handled inside onMarkDelivered via alert.)
   const isDeliverDisabled = !(
-    selectedTab === "Shipped" &&
-    selectedIds.length > 0 &&
-    (!needsDriver || selectedDriverId)
+    selectedTab === "Shipped" && selectedIds.length > 0
   );
 
   // allocation (To Ship flow)
@@ -411,7 +423,7 @@ export default function OrderStatus() {
               }`}
               title={
                 needsDriver && !selectedDriverId
-                  ? "Select a driver in the trucking table first (required for delivery orders)"
+                  ? "Clicking will warn you to select a driver for delivery orders."
                   : "Mark selected orders as Delivered"
               }
             >
@@ -427,11 +439,12 @@ export default function OrderStatus() {
       <div className="p-4 sm:p-6 rounded-lg border border-gray-200 shadow-lg overflow-x-auto">
         <OrderTable
           key={reloadKey}
+          refreshKey={reloadKey}
           status={mapStatusForDB(selectedTab)}
           selectedOption={mapStatusForDB(selectedTab)}
           mode={selectionMode}
           selectedIds={selectedIds}
-          // IMPORTANT: pass back both IDs and row meta (with shipping_mode)
+          // IMPORTANT: parent expects ids AND row meta (with shipping_mode)
           onSelectionChange={(ids, rowsMeta) => {
             setSelectedIds(ids || []);
 
@@ -440,7 +453,7 @@ export default function OrderStatus() {
               const map = {};
               rowsMeta.forEach((row) => {
                 if (!row) return;
-                const key = String(row.id ?? row.order_id);
+                const key = String(row.orderID ?? row.order_id);
                 map[key] = row;
               });
               setSelectedOrdersMeta(map);

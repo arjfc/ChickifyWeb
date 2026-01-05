@@ -1,36 +1,34 @@
+// src/components/admin/modals/EditCoopServicePlanModal.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import Modal from "react-modal";
+import { FiX, FiPlus, FiTrash2 } from "react-icons/fi";
+import {
+  updateServicePlan,
+  upsertPlanTiers,
+  deletePlanTiers,
+  fetchTiersByPlanIds,
+  replaceTierFeeds,
+} from "@/services/coopServicePlan";
 
-const PLAN_META = {
-  rtl_feeds: { title: "Chickens (RTL) + Feeds" },
-  feeds_only: { title: "Feeds Only" },
-  rtl_only: { title: "Chickens (RTL) Only" },
+const modalStyle = {
+  content: {
+    top: "50%",
+    left: "50%",
+    right: "auto",
+    bottom: "auto",
+    transform: "translate(-50%, -50%)",
+    borderRadius: 20,
+    padding: 16,
+    width: "min(1100px, 92vw)",
+    maxHeight: "85vh",
+    overflow: "auto",
+  },
+  overlay: { backgroundColor: "rgba(0,0,0,0.75)", zIndex: 1000 },
 };
 
-function monthsLabel(m) {
-  if (!m) return "—";
-  if (m === 12) return "1 year";
-  if (m === 18) return "1.5 years";
-  if (m === 24) return "2 years";
-  if (m % 12 === 0) return `${m / 12} years`;
-  return `${m} months`;
+function deepCopy(x) {
+  return JSON.parse(JSON.stringify(x));
 }
-
-function uniqSortedNums(arr) {
-  return Array.from(new Set(arr.filter((n) => Number.isFinite(n)))).sort((a, b) => a - b);
-}
-
-function parseCsvNumbers(s) {
-  return uniqSortedNums(
-    String(s || "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map((x) => Number(x))
-      .filter((n) => Number.isFinite(n) && n > 0)
-  );
-}
-
-/* ----------------------------- Small UI bits ----------------------------- */
 
 function Button({ variant = "primary", className = "", ...props }) {
   const base =
@@ -39,6 +37,7 @@ function Button({ variant = "primary", className = "", ...props }) {
     primary: "bg-yellow-400 text-black hover:bg-yellow-300",
     secondary: "bg-gray-900 text-white hover:bg-gray-800",
     ghost: "bg-transparent text-gray-900 hover:bg-gray-100",
+    danger: "bg-red-600 text-white hover:bg-red-500",
   };
   return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
 }
@@ -49,6 +48,19 @@ function Input({ label, className = "", ...props }) {
       {label ? <div className="mb-1 text-sm font-medium text-gray-700">{label}</div> : null}
       <input
         className={`w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-yellow-400 ${className}`}
+        {...props}
+      />
+    </label>
+  );
+}
+
+function Textarea({ label, className = "", ...props }) {
+  return (
+    <label className="block">
+      {label ? <div className="mb-1 text-sm font-medium text-gray-700">{label}</div> : null}
+      <textarea
+        className={`w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-yellow-400 ${className}`}
+        rows={4}
         {...props}
       />
     </label>
@@ -74,206 +86,606 @@ function Select({ label, value, onChange, options, className = "" }) {
   );
 }
 
-function ModalShell({ open, title, children, onClose, footer }) {
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose?.();
-    }
-    if (open) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
+function Toggle({ label, checked, onChange }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 p-4">
-          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-          <button className="rounded-lg px-2 py-1 text-sm hover:bg-gray-100" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-
-        <div className="p-4">{children}</div>
-
-        {footer ? <div className="border-t border-gray-100 p-4">{footer}</div> : null}
-      </div>
-    </div>
+    <label className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+      <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="text-sm font-medium text-gray-800">{label}</span>
+    </label>
   );
 }
 
-/* -------------------------------- Component -------------------------------- */
+function money(n) {
+  const x = Number(n || 0);
+  return x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
-export default function EditServicePlanModal({ open, onClose, plan, onSave }) {
-  const [editErr, setEditErr] = useState(null);
+function computeTier(t) {
+  const rtl = Number(t.rtl_cost || 0);
+  const feeds = Number(t.feeds_cost || 0);
+  const months = Number(t.months_to_pay || 0);
 
-  const [editDefault, setEditDefault] = useState("rtl_feeds");
-  const [editHeadsCsv, setEditHeadsCsv] = useState("45,60,100,120");
-  const [editMonthsCsv, setEditMonthsCsv] = useState("3,6,12,18,24");
-  const [editKgCsv, setEditKgCsv] = useState("25,50,75");
+  const total = rtl + feeds;
+  const monthly = months > 0 ? total / months : 0;
 
-  // ✅ NEW: normal input (NOT options)
-  const [editRtlAgeWeeks, setEditRtlAgeWeeks] = useState("18");
+  return {
+    ...t,
+    total_cost: Number.isFinite(total) ? total : 0,
+    est_monthly_ui: Number.isFinite(monthly) ? monthly : 0, // UI-only
+  };
+}
 
-  // ✅ when modal opens, preload values from plan
+function makeTmpId(prefix = "tmp") {
+  return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+}
+
+export default function EditCoopServicePlanModal({
+  open,
+  onClose,
+  plans = [],
+  tiersByPlan = {},
+  tierFeedsByTier = {},
+  feedTypes = [],
+  onSaved,
+}) {
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const planOptions = useMemo(
+    () =>
+      (plans || []).map((p) => ({
+        value: String(p.plan_id),
+        label: `${p.title || p.service_type} (plan #${p.plan_id})`,
+      })),
+    [plans]
+  );
+
+  const [activePlanId, setActivePlanId] = useState(planOptions?.[0]?.value || "");
+
+  const [draftPlan, setDraftPlan] = useState(null);
+  const [draftTiers, setDraftTiers] = useState([]);
+  const [draftFeeds, setDraftFeeds] = useState({});
+
   useEffect(() => {
     if (!open) return;
-    setEditErr(null);
+    const first = planOptions?.[0]?.value || "";
+    setActivePlanId((p) => p || first);
+  }, [open, planOptions]);
 
-    setEditDefault(plan?.default_plan || "rtl_feeds");
-    setEditHeadsCsv((plan?.chicken_heads_options || [45, 60, 100, 120]).join(","));
-    setEditMonthsCsv((plan?.feed_months_options || [3, 6, 12, 18, 24]).join(","));
-    setEditKgCsv((plan?.feed_kg_options || [25, 50, 75]).join(","));
+  useEffect(() => {
+    if (!open) return;
+    if (!activePlanId) return;
 
-    // ✅ default age weeks (single value)
-    setEditRtlAgeWeeks(
-      plan?.rtl_age_weeks != null ? String(plan.rtl_age_weeks) : "18"
-    );
-  }, [open, plan]);
+    const planIdNum = Number(activePlanId);
+    const p = plans.find((x) => Number(x.plan_id) === planIdNum);
+    const tiers = tiersByPlan?.[planIdNum] || [];
 
-  const preview = useMemo(() => {
-    const heads = parseCsvNumbers(editHeadsCsv);
-    const months = parseCsvNumbers(editMonthsCsv);
-    const kgs = parseCsvNumbers(editKgCsv);
-    const age = Number(editRtlAgeWeeks);
+    setErr("");
+    setDraftPlan(p ? deepCopy(p) : null);
 
-    return {
-      title: PLAN_META[editDefault]?.title ?? editDefault,
-      heads,
-      months,
-      kgs,
-      rtl_age_weeks: Number.isFinite(age) ? age : null,
-    };
-  }, [editDefault, editHeadsCsv, editMonthsCsv, editKgCsv, editRtlAgeWeeks]);
+    const normalized = tiers.map((t) => ({
+      ...deepCopy(t),
+      __tmp: makeTmpId("tier"),
+      __deleted: false,
+    }));
+    setDraftTiers(normalized.map(computeTier));
 
-  function handleSave() {
-    setEditErr(null);
-
-    const heads = parseCsvNumbers(editHeadsCsv).map((n) => Math.round(n));
-    const months = parseCsvNumbers(editMonthsCsv).map((n) => Math.round(n));
-    const kgs = parseCsvNumbers(editKgCsv);
-    const age = Number(editRtlAgeWeeks);
-
-    if (months.some((m) => m > 24))
-      return setEditErr("Months of feeds supply options cannot exceed 24 months (2 years).");
-    if (heads.length === 0) return setEditErr("Please provide at least one chicken heads option.");
-    if (months.length === 0) return setEditErr("Please provide at least one months-of-supply option.");
-    if (kgs.length === 0) return setEditErr("Please provide at least one feed kg option.");
-
-    // ✅ validate age weeks (single input)
-    if (!Number.isFinite(age) || age < 1 || age > 200) {
-      return setEditErr("Chickens (RTL) age (weeks) must be 1–200.");
+    const nextFeeds = {};
+    for (const t of tiers) {
+      const items = tierFeedsByTier?.[t.tier_id] || [];
+      nextFeeds[String(t.tier_id)] = deepCopy(items).map((it) => ({
+        feed_type_id: it.feed_type_id,
+        est_feed_kg_month: it.est_feed_kg_month,
+      }));
     }
+    setDraftFeeds(nextFeeds);
+  }, [open, activePlanId, plans, tiersByPlan, tierFeedsByTier]);
 
-    onSave?.({
-      default_plan: editDefault,
-      chicken_heads_options: heads,
-      feed_months_options: months,
-      feed_kg_options: kgs,
+  const isFeedsOnly = draftPlan?.service_type === "feeds_only";
+  const activePlanNum = Number(activePlanId || 0);
 
-      // ✅ NEW field (single value)
-      rtl_age_weeks: Math.round(age),
-
-      updated_at: new Date().toISOString(),
+  function setTierField(idx, key, value) {
+    setDraftTiers((prev) => {
+      const next = [...prev];
+      const row = { ...next[idx], [key]: value };
+      next[idx] = computeTier(row);
+      return next;
     });
+  }
 
-    onClose?.();
+  function addTier() {
+    setDraftTiers((prev) => [
+      computeTier({
+        tier_id: null,
+        plan_id: Number(activePlanId),
+        heads: 0,
+        est_feed_kg_month: 0,
+        est_sacks_month: 0,
+        rtl_cost: 0,
+        feeds_cost: 0,
+        total_cost: 0,
+        months_to_pay: 12,
+        __tmp: makeTmpId("tier"),
+        __deleted: false,
+      }),
+      ...prev,
+    ]);
+  }
+
+  function toggleDeleteTier(idx) {
+    setDraftTiers((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], __deleted: !next[idx].__deleted };
+      return next;
+    });
+  }
+
+  function addFeedRowForTier(tierId) {
+    const key = String(tierId);
+    setDraftFeeds((prev) => {
+      const cur = prev[key] || [];
+      return {
+        ...prev,
+        [key]: [...cur, { feed_type_id: feedTypes?.[0]?.feed_type_id ?? 0, est_feed_kg_month: 0 }],
+      };
+    });
+  }
+
+  function updateFeedRow(tierId, idx, patch) {
+    const key = String(tierId);
+    setDraftFeeds((prev) => {
+      const arr = [...(prev[key] || [])];
+      arr[idx] = { ...arr[idx], ...patch };
+      return { ...prev, [key]: arr };
+    });
+  }
+
+  function removeFeedRow(tierId, idx) {
+    const key = String(tierId);
+    setDraftFeeds((prev) => {
+      const arr = [...(prev[key] || [])];
+      arr.splice(idx, 1);
+      return { ...prev, [key]: arr };
+    });
+  }
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      setErr("");
+
+      if (!draftPlan?.plan_id) throw new Error("No plan selected.");
+
+      // 1) Update plan details (include feeds pricing for Option A)
+      await updateServicePlan(draftPlan.plan_id, {
+        title: draftPlan.title,
+        description: draftPlan.description,
+        is_recommended: !!draftPlan.is_recommended,
+        is_active: !!draftPlan.is_active,
+
+        // ✅ Option A fields (only meaningful for feeds_only)
+        feed_price_per_kg:
+          draftPlan.feed_price_per_kg === "" || draftPlan.feed_price_per_kg == null
+            ? null
+            : Number(draftPlan.feed_price_per_kg),
+        sack_kg:
+          draftPlan.sack_kg === "" || draftPlan.sack_kg == null ? 50 : Number(draftPlan.sack_kg),
+      });
+
+      // If Feeds Only, STOP HERE. No tier pricing / breakdown.
+      if (isFeedsOnly) {
+        onSaved?.();
+        onClose?.();
+        return;
+      }
+
+      // 2) Delete tiers marked deleted
+      const toDeleteIds = draftTiers.filter((t) => t.__deleted && t.tier_id).map((t) => t.tier_id);
+      if (toDeleteIds.length) await deletePlanTiers(toDeleteIds);
+
+      // 3) Upsert tiers not deleted (ONLY DB columns)
+      const upsertRows = draftTiers
+        .filter((t) => !t.__deleted)
+        .map((t) => ({
+          tier_id: t.tier_id || null,
+          plan_id: Number(activePlanId),
+          heads: Number(t.heads || 0),
+          est_feed_kg_month: Number(t.est_feed_kg_month || 0),
+          est_sacks_month: Number(t.est_sacks_month || 0),
+          rtl_cost: Number(t.rtl_cost || 0),
+          feeds_cost: Number(t.feeds_cost || 0),
+          total_cost: Number((Number(t.rtl_cost || 0) + Number(t.feeds_cost || 0)) || 0),
+          months_to_pay: Number(t.months_to_pay || 0),
+        }));
+
+      await upsertPlanTiers(upsertRows);
+
+      // 4) Refetch tiers to get tier_ids for newly inserted rows
+      const refreshed = await fetchTiersByPlanIds([Number(activePlanId)]);
+
+      function findTierIdByHeadsMonths(heads, months) {
+        const h = Number(heads || 0);
+        const m = Number(months || 0);
+        const match = refreshed.find((x) => Number(x.heads) === h && Number(x.months_to_pay) === m);
+        return match?.tier_id || null;
+      }
+
+      // 5) Save tier feed breakdown
+      for (const t of draftTiers.filter((x) => !x.__deleted)) {
+        const tierId = t.tier_id || findTierIdByHeadsMonths(t.heads, t.months_to_pay);
+        if (!tierId) continue;
+
+        const items = draftFeeds[String(t.tier_id)] || draftFeeds[String(tierId)] || [];
+        await replaceTierFeeds(tierId, items);
+      }
+
+      onSaved?.();
+      onClose?.();
+    } catch (e) {
+      setErr(e?.message || String(e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <ModalShell
-      open={open}
-      title="Edit Service Plan"
-      onClose={onClose}
-      footer={
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-xs text-gray-600">
-            Use comma-separated values. Months max is <b>24</b>.
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSave}>
-              Save changes
-            </Button>
-          </div>
+    <Modal isOpen={open} onRequestClose={onClose} style={modalStyle} ariaHideApp={false}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-lg font-extrabold text-gray-900">Coop Edit: Service Plan & Tiers</div>
+          <div className="text-sm text-gray-600">Edit plan info, tier pricing, and configuration.</div>
         </div>
-      }
-    >
-      {editErr ? (
-        <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-          {editErr}
+
+        <button
+          className="rounded-xl p-2 text-gray-700 hover:bg-gray-100"
+          onClick={onClose}
+          disabled={saving}
+          title="Close"
+        >
+          <FiX />
+        </button>
+      </div>
+
+      {err ? (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {err}
         </div>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
         <Select
-          label="Default plan"
-          value={editDefault}
-          onChange={setEditDefault}
-          options={[
-            { value: "rtl_feeds", label: "Chickens (RTL) + Feeds (default)" },
-            { value: "feeds_only", label: "Feeds only" },
-            { value: "rtl_only", label: "Chickens (RTL) only" },
-          ]}
+          label="Select plan"
+          value={activePlanId}
+          onChange={setActivePlanId}
+          options={planOptions.length ? planOptions : [{ value: "", label: "No plans found" }]}
         />
 
-        {/* ✅ NEW: normal age input */}
-        <Input
-          label="Chickens (RTL) age (weeks)"
-          type="number"
-          min="1"
-          max="200"
-          placeholder="e.g. 18"
-          value={editRtlAgeWeeks}
-          onChange={(e) => setEditRtlAgeWeeks(e.target.value)}
-        />
+        <div className="flex items-end justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving || !draftPlan}>
+            {saving ? "Saving..." : "Save changes"}
+          </Button>
+        </div>
+      </div>
 
-        <Input
-          label="Chicken heads options"
-          placeholder="45,60,100,120"
-          value={editHeadsCsv}
-          onChange={(e) => setEditHeadsCsv(e.target.value)}
-        />
+      {/* Plan fields */}
+      <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-extrabold text-gray-900">Plan details</div>
+          <div className="text-xs text-gray-500">plan_id: {draftPlan?.plan_id ?? "—"}</div>
+        </div>
 
-        <Input
-          label="Months of feeds supply options (max 24)"
-          placeholder="3,6,12,18,24"
-          value={editMonthsCsv}
-          onChange={(e) => setEditMonthsCsv(e.target.value)}
-        />
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            label="Title"
+            value={draftPlan?.title ?? ""}
+            onChange={(e) => setDraftPlan((p) => ({ ...p, title: e.target.value }))}
+            disabled={!draftPlan}
+          />
+          <Input label="Service type" value={draftPlan?.service_type ?? ""} disabled />
 
-        <Input
-          label="Feed kg options"
-          placeholder="25,50,75"
-          value={editKgCsv}
-          onChange={(e) => setEditKgCsv(e.target.value)}
-        />
+          <div className="md:col-span-2">
+            <Textarea
+              label="Description"
+              value={draftPlan?.description ?? ""}
+              onChange={(e) => setDraftPlan((p) => ({ ...p, description: e.target.value }))}
+              disabled={!draftPlan}
+            />
+          </div>
 
-        {/* Preview (kept simple) */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-3 text-sm md:col-span-2">
-          <div className="font-bold text-gray-900">Preview</div>
-          <div className="mt-2 space-y-1 text-gray-700">
-            <div>
-              <b>Default:</b> {preview.title}
+          <Toggle
+            label="Recommended (Default)"
+            checked={!!draftPlan?.is_recommended}
+            onChange={(v) => setDraftPlan((p) => ({ ...p, is_recommended: v }))}
+          />
+          <Toggle
+            label="Active"
+            checked={!!draftPlan?.is_active}
+            onChange={(v) => setDraftPlan((p) => ({ ...p, is_active: v }))}
+          />
+        </div>
+
+        {/* ✅ OPTION A: Feeds Only pricing block */}
+        {isFeedsOnly ? (
+          <div className="mt-4 rounded-2xl border border-yellow-200 bg-yellow-50 p-4">
+            <div className="text-sm font-extrabold text-gray-900">Feeds pricing (Feeds Only)</div>
+            <div className="mt-1 text-xs text-gray-700">
+              Farmers will input heads + age + months in mobile. Total cost is computed from feeding guide × price/kg.
             </div>
-            <div>
-              <b>RTL age (weeks):</b> {preview.rtl_age_weeks ?? "—"}
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <Input
+                label="Feeds price per kg (₱)"
+                type="number"
+                step="0.01"
+                value={draftPlan?.feed_price_per_kg ?? ""}
+                onChange={(e) => setDraftPlan((p) => ({ ...p, feed_price_per_kg: e.target.value }))}
+                disabled={saving}
+              />
+              <Input
+                label="Sack weight (kg)"
+                type="number"
+                step="0.01"
+                value={draftPlan?.sack_kg ?? 50}
+                onChange={(e) => setDraftPlan((p) => ({ ...p, sack_kg: e.target.value }))}
+                disabled={saving}
+              />
             </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Tiers - hide for Feeds Only */}
+      {!isFeedsOnly ? (
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
             <div>
-              <b>Heads:</b> {preview.heads.join(", ") || "—"}
+              <div className="text-sm font-extrabold text-gray-900">Tier plans</div>
+              <div className="text-xs text-gray-600">heads + months + estimated feeds + costs. Total/monthly auto computed.</div>
             </div>
-            <div>
-              <b>Months of feeds supply:</b> {preview.months.map(monthsLabel).join(", ") || "—"}
-            </div>
-            <div>
-              <b>Feed kg:</b> {preview.kgs.join(", ") || "—"}
+
+            <Button variant="secondary" onClick={addTier} disabled={!activePlanNum || saving}>
+              <FiPlus className="mr-2" /> Add tier
+            </Button>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-gray-200">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-xs font-bold uppercase tracking-wide text-gray-600">
+                  <th className="px-4 py-3">Heads</th>
+                  <th className="px-4 py-3">Months</th>
+                  <th className="px-4 py-3">Est feed kg/mo</th>
+                  <th className="px-4 py-3">Est sacks/mo</th>
+                  <th className="px-4 py-3">RTL cost</th>
+                  <th className="px-4 py-3">Feeds cost</th>
+                  <th className="px-4 py-3">Total cost</th>
+                  <th className="px-4 py-3">Est / month</th>
+                  <th className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {!draftTiers.length ? (
+                  <tr>
+                    <td className="px-4 py-5 text-gray-600" colSpan={9}>
+                      No tiers found for this plan.
+                    </td>
+                  </tr>
+                ) : (
+                  draftTiers.map((t, idx) => {
+                    const isDeleted = !!t.__deleted;
+                    return (
+                      <tr key={t.__tmp} className={isDeleted ? "opacity-50" : ""}>
+                        <td className="border-t border-gray-100 px-4 py-2">
+                          <input
+                            type="number"
+                            className="w-24 rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-yellow-400"
+                            value={t.heads ?? 0}
+                            onChange={(e) => setTierField(idx, "heads", Number(e.target.value))}
+                            disabled={saving}
+                          />
+                        </td>
+
+                        <td className="border-t border-gray-100 px-4 py-2">
+                          <input
+                            type="number"
+                            className="w-24 rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-yellow-400"
+                            value={t.months_to_pay ?? 0}
+                            onChange={(e) => setTierField(idx, "months_to_pay", Number(e.target.value))}
+                            disabled={saving}
+                          />
+                        </td>
+
+                        <td className="border-t border-gray-100 px-4 py-2">
+                          <input
+                            type="number"
+                            step="0.1"
+                            className="w-32 rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-yellow-400"
+                            value={t.est_feed_kg_month ?? 0}
+                            onChange={(e) => setTierField(idx, "est_feed_kg_month", Number(e.target.value))}
+                            disabled={saving}
+                          />
+                        </td>
+
+                        <td className="border-t border-gray-100 px-4 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-28 rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-yellow-400"
+                            value={t.est_sacks_month ?? 0}
+                            onChange={(e) => setTierField(idx, "est_sacks_month", Number(e.target.value))}
+                            disabled={saving}
+                          />
+                        </td>
+
+                        <td className="border-t border-gray-100 px-4 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-32 rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-yellow-400"
+                            value={t.rtl_cost ?? 0}
+                            onChange={(e) => setTierField(idx, "rtl_cost", Number(e.target.value))}
+                            disabled={saving}
+                          />
+                        </td>
+
+                        <td className="border-t border-gray-100 px-4 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-32 rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-yellow-400"
+                            value={t.feeds_cost ?? 0}
+                            onChange={(e) => setTierField(idx, "feeds_cost", Number(e.target.value))}
+                            disabled={saving}
+                          />
+                        </td>
+
+                        <td className="border-t border-gray-100 px-4 py-2 font-semibold">{money(t.total_cost)}</td>
+                        <td className="border-t border-gray-100 px-4 py-2 font-semibold">{money(t.est_monthly_ui)}</td>
+
+                        <td className="border-t border-gray-100 px-4 py-2 text-right">
+                          <button
+                            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${
+                              isDeleted
+                                ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                : "bg-red-50 text-red-700 hover:bg-red-100"
+                            }`}
+                            onClick={() => toggleDeleteTier(idx)}
+                            disabled={saving}
+                            title={isDeleted ? "Undo delete" : "Delete tier"}
+                          >
+                            <FiTrash2 />
+                            {isDeleted ? "Undo" : "Delete"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Tier feed breakdown (unchanged) */}
+          <div className="mt-4">
+            <div className="text-sm font-extrabold text-gray-900">Tier feed breakdown</div>
+            <div className="text-xs text-gray-600">Configure estimated feed kg per month per feed type for each tier.</div>
+
+            <div className="mt-3 space-y-3">
+              {draftTiers
+                .filter((t) => !t.__deleted)
+                .map((t) => {
+                  const tierKey = String(t.tier_id || `new:${t.heads}:${t.months_to_pay}`);
+                  const realTierId = t.tier_id;
+                  const items = realTierId ? draftFeeds[String(realTierId)] || [] : [];
+
+                  return (
+                    <div key={tierKey} className="rounded-2xl border border-gray-200 bg-white p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-bold text-gray-900">
+                          Tier: {t.heads} heads • {t.months_to_pay} months
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          onClick={() => realTierId && addFeedRowForTier(realTierId)}
+                          disabled={!realTierId || saving}
+                          className={!realTierId ? "opacity-60" : ""}
+                        >
+                          <FiPlus className="mr-2" />
+                          Add feed type
+                        </Button>
+                      </div>
+
+                      {!realTierId ? (
+                        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          This tier is new (no tier_id yet). Save first, then edit its feed breakdown.
+                        </div>
+                      ) : null}
+
+                      {realTierId ? (
+                        <div className="mt-3 overflow-x-auto rounded-2xl border border-gray-200">
+                          <table className="min-w-full text-left text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 text-xs font-bold uppercase tracking-wide text-gray-600">
+                                <th className="px-4 py-3">Feed type</th>
+                                <th className="px-4 py-3">Est kg / month</th>
+                                <th className="px-4 py-3 text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {!items.length ? (
+                                <tr>
+                                  <td className="px-4 py-4 text-gray-600" colSpan={3}>
+                                    No feed types configured for this tier.
+                                  </td>
+                                </tr>
+                              ) : (
+                                items.map((it, idx) => (
+                                  <tr key={`${realTierId}_${idx}`}>
+                                    <td className="border-t border-gray-100 px-4 py-2">
+                                      <select
+                                        className="w-64 rounded-xl border border-gray-300 bg-white px-3 py-2 outline-none focus:border-yellow-400"
+                                        value={String(it.feed_type_id ?? 0)}
+                                        onChange={(e) =>
+                                          updateFeedRow(realTierId, idx, { feed_type_id: Number(e.target.value) })
+                                        }
+                                        disabled={saving}
+                                      >
+                                        {feedTypes?.length ? (
+                                          feedTypes.map((ft) => (
+                                            <option key={ft.feed_type_id} value={String(ft.feed_type_id)}>
+                                              {ft.name}
+                                            </option>
+                                          ))
+                                        ) : (
+                                          <option value={String(it.feed_type_id ?? 0)}>
+                                            Feed type #{it.feed_type_id ?? 0}
+                                          </option>
+                                        )}
+                                      </select>
+                                    </td>
+
+                                    <td className="border-t border-gray-100 px-4 py-2">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        className="w-40 rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-yellow-400"
+                                        value={it.est_feed_kg_month ?? 0}
+                                        onChange={(e) =>
+                                          updateFeedRow(realTierId, idx, { est_feed_kg_month: Number(e.target.value) })
+                                        }
+                                        disabled={saving}
+                                      />
+                                    </td>
+
+                                    <td className="border-t border-gray-100 px-4 py-2 text-right">
+                                      <button
+                                        className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                                        onClick={() => removeFeedRow(realTierId, idx)}
+                                        disabled={saving}
+                                      >
+                                        <FiTrash2 />
+                                        Remove
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
-      </div>
-    </ModalShell>
+      ) : null}
+    </Modal>
   );
 }

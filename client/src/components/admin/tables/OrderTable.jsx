@@ -3,7 +3,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import Table from "../../Table";
 import { FaCircleInfo } from "react-icons/fa6";
 import Modal from "react-modal";
-import { listOrdersForTable, adminGetFullOrderDetails } from "@/services/OrderNAllocation";
+import {
+  listOrdersForTable,
+  adminGetFullOrderDetails,
+} from "@/services/OrderNAllocation";
 import { fetchSizeMetaMap } from "@/services/EggInventory";
 
 const modalStyle = {
@@ -94,8 +97,6 @@ export default function OrderTable({
   const [pageSize, setPageSize] = useState(10);
   const pageSizeOptions = [5, 10, 25, 50];
 
-  
-
   // modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState(null);
@@ -111,6 +112,7 @@ export default function OrderTable({
         setLoadErr(null);
         const apiRows = await listOrdersForTable({ status: effectiveStatus });
         if (!alive) return;
+
         const shaped = (apiRows || []).map((r) => ({
           orderID: r.id,
           customerName: r.customer || "—",
@@ -120,8 +122,10 @@ export default function OrderTable({
           paymentStatus: r.paymentStatus || "—",
           phoneNumber: "—",
           address: r.buyerCoopName || "—",
+          shipping_mode: r.shipping_mode || r.shippingMode || null, // 👈 important
           raw: r,
         }));
+
         setRows(shaped);
         setPage(1);
       } catch (e) {
@@ -148,12 +152,19 @@ export default function OrderTable({
 
   const isSelected = (id) => selectedIds.includes(id);
 
+  // helper: get selected row objects for a list of IDs
+  const getSelectedRows = (ids) =>
+    ids
+      .map((id) => rows.find((r) => r.orderID === id))
+      .filter(Boolean);
+
   const toggleCheckbox = (id) => {
     if (mode !== "multi") return;
     const next = isSelected(id)
       ? selectedIds.filter((x) => x !== id)
       : [...selectedIds, id];
-    onSelectionChange(next);
+    const metaRows = getSelectedRows(next);
+    onSelectionChange(next, metaRows);
   };
 
   const selectAllOnPage = (checked) => {
@@ -166,12 +177,15 @@ export default function OrderTable({
     } else {
       next = selectedIds.filter((id) => !pageSet.has(id));
     }
-    onSelectionChange(next);
+    const metaRows = getSelectedRows(next);
+    onSelectionChange(next, metaRows);
   };
 
   const setRadio = (id) => {
     if (mode !== "single") return;
-    onSelectionChange(id ? [id] : []);
+    const next = id ? [id] : [];
+    const metaRows = getSelectedRows(next);
+    onSelectionChange(next, metaRows);
   };
 
   const selectionHeader =
@@ -184,10 +198,6 @@ export default function OrderTable({
         checked={
           currentRows.length > 0 &&
           currentRows.every((r) => selectedIds.includes(r.orderID))
-        }
-        indeterminate={
-          currentRows.some((r) => selectedIds.includes(r.orderID)) &&
-          !currentRows.every((r) => selectedIds.includes(r.orderID))
         }
       />
     ) : mode === "single" ? (
@@ -346,7 +356,7 @@ export default function OrderTable({
               .map(([sid, t]) => `${labelFromSizeId(sid)}×${t}`)
               .join(", ");
 
-            const selected = mode === "single" && isSelected(item.orderID);
+            const selected = isSelected(item.orderID);
 
             return (
               <tr
@@ -395,7 +405,7 @@ export default function OrderTable({
                     <input
                       type="checkbox"
                       className="accent-primaryYellow focus:ring-2 focus:ring-black"
-                      checked={selectedIds.includes(item.orderID)}
+                      checked={selected}
                       onChange={() => toggleCheckbox(item.orderID)}
                     />
                   ) : mode === "single" ? (
@@ -403,7 +413,7 @@ export default function OrderTable({
                       type="radio"
                       name="order-single-select"
                       className="accent-primaryYellow focus:ring-2 focus:ring-black"
-                      checked={selectedIds.includes(item.orderID)}
+                      checked={selected}
                       onChange={() => setRadio(item.orderID)}
                     />
                   ) : null}

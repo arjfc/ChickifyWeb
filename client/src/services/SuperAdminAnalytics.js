@@ -85,7 +85,7 @@ export async function getSalesTrendOverall(mode = "daily") {
 
 export async function getAdminFeesTimeseries(months = 6) {
   const { data, error } = await supabase.rpc(
-    "superadmin_total_admin_fees",
+    "view_admin_monthly_remittance_overview",
     {
       p_month: month, // 1–12
       p_year: year,   // e.g. 2024
