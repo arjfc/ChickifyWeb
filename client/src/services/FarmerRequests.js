@@ -152,9 +152,9 @@ async function processFarmerRequest(rowId, action, reason) {
 /* =========================================================
  * Approve farmer request
  * =======================================================*/
-export async function approveFarmerRequest(row) {
+export async function approveFarmerRequest(row, reason) {
   // 1) Update DB via RPC
-  await processFarmerRequest(row.id, "approved", "Approved by admin");
+  await processFarmerRequest(row.id, "approved", reason);
 
   // 2) Fetch coop name of current admin
   const coopName = await fetchCoopNameForUser();

@@ -23,8 +23,8 @@ async function processMembershipPayment(membershipPaymentId, action, reason) {
  * - creates cash_ledger entries
  * - (and whatever your RPC does next)
  * =======================================================*/
-export async function verifyMembershipPayment(membershipPaymentId) {
-  return processMembershipPayment(membershipPaymentId, "verified", null);
+export async function verifyMembershipPayment(membershipPaymentId, reason) {
+  return processMembershipPayment(membershipPaymentId, "verified", reason);
 }
 
 /* =========================================================

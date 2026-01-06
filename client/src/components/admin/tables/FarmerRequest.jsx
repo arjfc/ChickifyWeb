@@ -95,17 +95,15 @@ const FarmerRequestsTable = forwardRef(
      * - Else: fallback to old approveFarmerRequest(row)
      */
     const onApprove = async (row) => {
+      const reason = window.prompt("Reason for approval:") || undefined;
+      if (!reason) {
+        setErrorMsg("Reason is required for approval");
+        return;
+      }
       setBusyId(row.id);
       setErrorMsg("");
       try {
-        const membershipPaymentId = getMembershipPaymentId(row);
-
-        if (membershipPaymentId) {
-          await verifyMembershipPayment(membershipPaymentId);
-        } else {
-          await approveFarmerRequest(row);
-        }
-
+        await approveFarmerRequest(row, reason);
         await refresh();
         onActionComplete && onActionComplete();
       } catch (e) {
@@ -121,18 +119,15 @@ const FarmerRequestsTable = forwardRef(
      * - Always reject farmer request (DB + email)
      */
     const onReject = async (row) => {
-      const reason = window.prompt("Reason (optional):") || undefined;
+      const reason = window.prompt("Reason for rejection:") || undefined;
+      if (!reason) {
+        setErrorMsg("Reason is required for rejection");
+        return;
+      }
       setBusyId(row.id);
       setErrorMsg("");
       try {
-        const membershipPaymentId = getMembershipPaymentId(row);
-
-        if (membershipPaymentId) {
-          await rejectMembershipPayment(membershipPaymentId, reason);
-        }
-
         await rejectFarmerRequest(row, reason);
-
         await refresh();
         onActionComplete && onActionComplete();
       } catch (e) {
@@ -164,14 +159,7 @@ const FarmerRequestsTable = forwardRef(
           for (let id of selected) {
             const row = rows.find((r) => r.id === id);
             if (!row) continue;
-
-            const membershipPaymentId = getMembershipPaymentId(row);
-
-            if (membershipPaymentId) {
-              await verifyMembershipPayment(membershipPaymentId);
-            } else {
-              await approveFarmerRequest(row);
-            }
+            await approveFarmerRequest(row, "Bulk approval");
           }
 
           await refresh();
