@@ -120,8 +120,10 @@ export async function upsertPlanTiers(rows) {
     // cast numeric fields
     if (x.heads != null) x.heads = Number(x.heads || 0);
     if (x.months_to_pay != null) x.months_to_pay = Number(x.months_to_pay || 0);
-    if (x.est_feed_kg_month != null) x.est_feed_kg_month = Number(x.est_feed_kg_month || 0);
-    if (x.est_sacks_month != null) x.est_sacks_month = Number(x.est_sacks_month || 0);
+    if (x.est_feed_kg_month != null)
+      x.est_feed_kg_month = Number(x.est_feed_kg_month || 0);
+    if (x.est_sacks_month != null)
+      x.est_sacks_month = Number(x.est_sacks_month || 0);
     if (x.rtl_cost != null) x.rtl_cost = Number(x.rtl_cost || 0);
     if (x.feeds_cost != null) x.feeds_cost = Number(x.feeds_cost || 0);
     if (x.total_cost != null) x.total_cost = Number(x.total_cost || 0);
@@ -167,7 +169,9 @@ export async function replaceTierFeeds(tierId, items) {
   const tid = Number(tierId);
 
   if (!Number.isFinite(tid) || tid <= 0) {
-    throw new Error("Invalid tier_id. Save tiers first before saving feed breakdown.");
+    throw new Error(
+      "Invalid tier_id. Save tiers first before saving feed breakdown."
+    );
   }
 
   if (!items?.length) {
@@ -187,11 +191,13 @@ export async function replaceTierFeeds(tierId, items) {
     map.set(ftid, Number(it?.est_feed_kg_month || 0));
   }
 
-  const payload = Array.from(map.entries()).map(([feed_type_id, est_feed_kg_month]) => ({
-    tier_id: tid,
-    feed_type_id,
-    est_feed_kg_month,
-  }));
+  const payload = Array.from(map.entries()).map(
+    ([feed_type_id, est_feed_kg_month]) => ({
+      tier_id: tid,
+      feed_type_id,
+      est_feed_kg_month,
+    })
+  );
 
   if (!payload.length) return;
 
@@ -221,3 +227,48 @@ export async function replaceTierFeeds(tierId, items) {
   }
 }
 
+export async function fetchMyServiceAvailmentsRpc(params = {}) {
+  const {
+    farmerId = "",
+    status = "",
+    serviceType = "",
+    fromDate = "", // YYYY-MM-DD
+    toDate = "", // YYYY-MM-DD
+    limit = 25,
+    offset = 0,
+  } = params;
+
+  const rpcArgs = {
+    p_farmer_id: farmerId || null,
+    p_status: status || null,
+    p_service_type: serviceType || null,
+    p_from: fromDate || null,
+    p_to: toDate || null,
+    p_limit: Number(limit || 25),
+    p_offset: Number(offset || 0),
+  };
+
+  const { data, error } = await supabase.rpc(
+    "get_farmers_services_availment",
+    rpcArgs
+  );
+  if (error) throw error;
+
+  const rows = data || [];
+  const total = rows.length ? Number(rows[0]?.total_count || 0) : 0;
+
+  return { rows, count: total };
+}
+
+
+// ✅ Farmers dropdown list (RPC)
+export async function fetchMyCoopFarmersForFilterRpc() {
+  const { data, error } = await supabase.rpc("get_my_coop_farmers_for_filter");
+  if (error) throw error;
+
+  return (data || []).map((r) => ({
+    user_id: r.farmer_id,
+    label: r.full_name || r.farmer_id,
+    contact_no: r.contact_no || "",
+  }));
+}

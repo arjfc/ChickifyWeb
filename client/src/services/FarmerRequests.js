@@ -13,7 +13,9 @@ export async function getCurrentUserId() {
 /* =========================================================
  * Pending farmer requests for this admin
  * RPC: admin_view_pending(_admin_id uuid)
- * Returns: id, status, requested_at, farmer_id, farmer_name, farmer_email
+ * Returns: id, status, requested_at, farmer_id, farmer_name, farmer_email,
+ *          farmer_contact_no, membership_payment_id, payment_status,
+ *          payment_amount, payment_method, payment_paid_at
  * =======================================================*/
 export async function fetchPendingFarmerRequestsForAdmin() {
   const adminId = await getCurrentUserId();
@@ -32,7 +34,12 @@ export async function fetchPendingFarmerRequestsForAdmin() {
     requested_at: r.requested_at,
     farmer_name: r.farmer_name,
     farmer_email: r.farmer_email,
+    farmer_contact_no: r.farmer_contact_no,
     membership_payment_id: r.membership_payment_id,
+    payment_status: r.payment_status,
+    payment_amount: r.payment_amount,
+    payment_method: r.payment_method,
+    payment_paid_at: r.payment_paid_at,
   }));
 }
 
@@ -85,9 +92,7 @@ async function sendFarmerPermitStatusEmail({
     : `Your farmer verification ${coopPhrase} has been rejected`;
 
   const reasonHtml =
-    !isApproved && reason
-      ? `<p><strong>Reason:</strong> ${reason}</p>`
-      : "";
+    !isApproved && reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
 
   const html = `
     <p>Hi ${friendly},</p>
@@ -99,8 +104,12 @@ async function sendFarmerPermitStatusEmail({
 
   const text = `Hi ${friendly},
 
-Your Chickify farmer verification ${coopName ? `under ${coopName}` : ""} has been ${statusPlain}.
-${!isApproved && reason ? `Reason: ${reason}\n\n` : ""}Please log in to your Chickify account to view the update.
+Your Chickify farmer verification ${
+    coopName ? `under ${coopName}` : ""
+  } has been ${statusPlain}.
+${
+  !isApproved && reason ? `Reason: ${reason}\n\n` : ""
+}Please log in to your Chickify account to view the update.
 
 Thank you,
 Chickify Team`;
@@ -183,34 +192,57 @@ export async function rejectFarmerRequest(row, reason) {
 }
 
 /* =========================================================
+ * Mark membership payment as paid (COD payments)
+ * RPC: admin_mark_membership_payment_paid(p_membership_payment_id bigint)
+ * =======================================================*/
+export async function markMembershipPaymentPaid(membershipPaymentId) {
+  const { data, error } = await supabase.rpc(
+    "admin_mark_membership_payment_paid",
+    {
+      p_membership_payment_id: membershipPaymentId,
+    }
+  );
+  if (error) throw error;
+  return data;
+}
+
+/* =========================================================
+ * UI Helper functions for payment status and button logic
+ * =======================================================*/
+export function shouldShowMarkAsPaidButton(row) {
+  return row.payment_method === "COD" && row.payment_status === "pending";
+}
+
+export function canApproveRequest(row) {
+  return ["paid", "verified"].includes(row.payment_status);
+}
+
+/* =========================================================
  * List farmers under this coop (admin_view_decisions)
  * Defaults: status='approved', onlyActive=true
  * =======================================================*/
-export async function fetchFarmersForAdmin(
-  {
-    // kept params for compatibility, but they are no longer used
-    status = "approved",
-    onlyActive = true,
-  } = {}
-) {
+export async function fetchFarmersForAdmin({
+  // kept params for compatibility, but they are no longer used
+  status = "approved",
+  onlyActive = true,
+} = {}) {
   const adminId = await getCurrentUserId();
 
-  const { data, error } = await supabase.rpc(
-    "admin_fetch_active_farmers",
-    { p_admin_id: adminId }
-  );
+  const { data, error } = await supabase.rpc("admin_fetch_active_farmers", {
+    p_admin_id: adminId,
+  });
 
   if (error) throw error;
 
   return (data || []).map((r) => ({
-    id: r.farmer_id,            
+    id: r.farmer_id,
     farmer_id: r.farmer_id,
     name: r.farmer_name || r.farmer_id,
     email: r.farmer_email || "—",
-    is_active: !!r.is_active,   
+    is_active: !!r.is_active,
     status: r.is_active ? "approved" : "inactive",
-    since: r.approved_at,         // from RPC
-    ended_at: null,               // not applicable anymore
+    since: r.approved_at, // from RPC
+    ended_at: null, // not applicable anymore
   }));
 }
 
@@ -327,8 +359,7 @@ export async function fetchFarmerPermit(farmerId) {
   }
 
   if (path) {
-    const { data: urlData } = supabase
-      .storage
+    const { data: urlData } = supabase.storage
       .from("business-permit")
       .getPublicUrl(path);
 
@@ -339,10 +370,6 @@ export async function fetchFarmerPermit(farmerId) {
 
   return row;
 }
-
-
-
-
 
 // export async function fetchFarmerDetails(farmerId) {
 //   const { data, error } = await supabase.rpc("admin_get_farmer_profile", {
@@ -357,7 +384,7 @@ export async function fetchFarmerPermit(farmerId) {
 //   return {
 //     id: row.user_id,
 //     name: row.full_name,
-//     sex: (row.sex || "").trim().toLowerCase(),  
+//     sex: (row.sex || "").trim().toLowerCase(),
 //     phoneNumber: row.contact_no,
 //     address: row.full_address,
 //     addressParts: {
@@ -373,7 +400,6 @@ export async function fetchFarmerPermit(farmerId) {
 //     permitUrl: row.permit_url,
 //   };
 // }
-
 
 // export async function adminUpdateFarmerProfile(payload) {
 //   const {
@@ -408,4 +434,4 @@ export async function fetchFarmerPermit(farmerId) {
 //   if (error) throw error;
 // }
 
-// 
+//

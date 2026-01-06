@@ -10,6 +10,9 @@ import {
   fetchPendingFarmerRequestsForAdmin,
   approveFarmerRequest,
   rejectFarmerRequest,
+  markMembershipPaymentPaid,
+  shouldShowMarkAsPaidButton,
+  canApproveRequest,
 } from "@/services/FarmerRequests";
 
 // ✅ use the helpers (recommended)
@@ -139,6 +142,20 @@ const FarmerRequestsTable = forwardRef(
       }
     };
 
+    const onMarkAsPaid = async (row) => {
+      setBusyId(row.id);
+      setErrorMsg("");
+      try {
+        await markMembershipPaymentPaid(row.membership_payment_id);
+        await refresh();
+        onActionComplete && onActionComplete();
+      } catch (e) {
+        setErrorMsg(e?.message || "Mark as paid failed");
+      } finally {
+        setBusyId(null);
+      }
+    };
+
     useImperativeHandle(ref, () => ({
       approveAllSelected: async () => {
         if (selected.size === 0) return;
@@ -193,7 +210,16 @@ const FarmerRequestsTable = forwardRef(
                 Farmer
               </th>
               <th className="py-3 px-4 text-center text-primaryYellow text-lg">
+                Contact
+              </th>
+              <th className="py-3 px-4 text-center text-primaryYellow text-lg">
                 Email
+              </th>
+              <th className="py-3 px-4 text-center text-primaryYellow text-lg">
+                Payment Status
+              </th>
+              <th className="py-3 px-4 text-center text-primaryYellow text-lg">
+                Amount
               </th>
               <th className="py-3 px-4 text-center text-primaryYellow text-lg">
                 Requested At
@@ -221,7 +247,23 @@ const FarmerRequestsTable = forwardRef(
                     {r.farmer_name || r.farmer_id}
                   </td>
                   <td className="py-3 px-4 text-gray-700 text-center">
+                    {r.farmer_contact_no || "—"}
+                  </td>
+                  <td className="py-3 px-4 text-gray-700 text-center">
                     {r.farmer_email || "—"}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <span className={`px-3 py-2 rounded-lg text-sm font-semibold ${
+                      r.payment_status === 'verified' ? 'bg-green-100 text-green-800' :
+                      r.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      r.payment_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {r.payment_status || 'not_submitted'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-gray-700 text-center">
+                    {r.payment_amount ? `₱${Number(r.payment_amount).toLocaleString()}` : '—'}
                   </td>
                   <td className="py-3 px-4 text-gray-700 text-center">
                     {r.requested_at
@@ -238,9 +280,19 @@ const FarmerRequestsTable = forwardRef(
                         View Permit
                       </button>
 
+                      {shouldShowMarkAsPaidButton(r) && (
+                        <button
+                          onClick={() => onMarkAsPaid(r)}
+                          disabled={busyId === r.id}
+                          className="px-3 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm shadow hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          Mark as Paid
+                        </button>
+                      )}
+
                       <button
                         onClick={() => onApprove(r)}
-                        disabled={busyId === r.id}
+                        disabled={busyId === r.id || !canApproveRequest(r)}
                         className="px-4 py-2 rounded-lg bg-primaryYellow text-white font-medium shadow hover:opacity-90 disabled:opacity-60"
                       >
                         Approve

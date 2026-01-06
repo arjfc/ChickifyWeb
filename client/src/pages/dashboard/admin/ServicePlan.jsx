@@ -1,6 +1,7 @@
 // src/pages/dashboard/admin/CoopServicePlanPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import EditCoopServicePlanModal from "@/components/admin/modals/EditServicePlanModal";
+import CoopServiceAvailmentsTable from "@/components/admin/tables/CoopServiceAvailmentsTable"; // ✅ ADD THIS
 import {
   fetchMyServicePlans,
   fetchTiersByPlanIds,
@@ -134,9 +135,7 @@ export default function CoopServicePlanPage() {
       setTierFeedsByTier(feedsMap);
 
       // set default active plan
-      const defaultPlan =
-        p.find((x) => x.is_recommended) || p[0] || null;
-
+      const defaultPlan = p.find((x) => x.is_recommended) || p[0] || null;
       setActivePlanId((prev) => prev ?? (defaultPlan ? defaultPlan.plan_id : null));
     } catch (e) {
       setErr(e?.message || String(e));
@@ -164,7 +163,9 @@ export default function CoopServicePlanPage() {
       const heads = Array.from(new Set(tiers.map((t) => t.heads))).sort((a, b) => a - b);
       const months = Array.from(new Set(tiers.map((t) => t.months_to_pay))).sort((a, b) => a - b);
 
-      const totalCosts = tiers.map((t) => Number(t.total_cost || (Number(t.rtl_cost || 0) + Number(t.feeds_cost || 0))));
+      const totalCosts = tiers.map((t) =>
+        Number(t.total_cost || (Number(t.rtl_cost || 0) + Number(t.feeds_cost || 0)))
+      );
       const minCost = totalCosts.length ? Math.min(...totalCosts) : 0;
       const maxCost = totalCosts.length ? Math.max(...totalCosts) : 0;
 
@@ -191,7 +192,8 @@ export default function CoopServicePlanPage() {
         <div>
           <h2 className="text-lg font-bold text-gray-900">Coop Service Plans</h2>
           <p className="text-sm text-gray-600">
-            Fetches from <span className="font-semibold">admin_coop_service_plan</span>, tiers, and tier feed breakdown.
+            Fetches from <span className="font-semibold">admin_coop_service_plan</span>, tiers, and tier
+            feed breakdown.
           </p>
         </div>
 
@@ -216,9 +218,7 @@ export default function CoopServicePlanPage() {
         {loading ? (
           <div className="py-10 text-center text-sm text-gray-600">Loading service plans…</div>
         ) : !plans.length ? (
-          <div className="py-10 text-center text-sm text-gray-600">
-            No service plans found for this admin.
-          </div>
+          <div className="py-10 text-center text-sm text-gray-600">No service plans found for this admin.</div>
         ) : (
           <div className="grid gap-4 md:grid-cols-3">
             {planCards.map((c) => {
@@ -230,13 +230,13 @@ export default function CoopServicePlanPage() {
                   key={p.plan_id}
                   onClick={() => setActivePlanId(p.plan_id)}
                   className={`text-left rounded-2xl border p-4 shadow-sm transition ${
-                    selected ? "border-yellow-400 bg-yellow-50" : "border-gray-200 bg-white hover:bg-gray-50"
+                    selected
+                      ? "border-yellow-400 bg-yellow-50"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
                   }`}
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="text-base font-extrabold text-gray-900">
-                      {p.title || p.service_type}
-                    </div>
+                    <div className="text-base font-extrabold text-gray-900">{p.title || p.service_type}</div>
                     <Badge tone={planTone(p)}>
                       {p.is_recommended ? "Recommended" : p.is_active ? "Active" : "Inactive"}
                     </Badge>
@@ -247,9 +247,7 @@ export default function CoopServicePlanPage() {
                   <div className="mt-4 space-y-2 text-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="font-semibold text-gray-800">Heads:</div>
-                      <div className="text-right text-gray-700">
-                        {c.heads.length ? c.heads.join(", ") : "—"}
-                      </div>
+                      <div className="text-right text-gray-700">{c.heads.length ? c.heads.join(", ") : "—"}</div>
                     </div>
 
                     <div className="flex items-start justify-between gap-3">
@@ -313,22 +311,20 @@ export default function CoopServicePlanPage() {
             <tbody>
               {activeTiers.map((t) => {
                 const total =
-                  Number(t.total_cost || 0) ||
-                  (Number(t.rtl_cost || 0) + Number(t.feeds_cost || 0));
+                  Number(t.total_cost || 0) || (Number(t.rtl_cost || 0) + Number(t.feeds_cost || 0));
                 const monthly =
                   Number(t.est_monthly || 0) ||
                   (Number(t.months_to_pay || 0) > 0 ? total / Number(t.months_to_pay || 1) : 0);
 
                 const feeds = tierFeedsByTier?.[t.tier_id] || [];
-                const breakdown =
-                  feeds.length
-                    ? feeds
-                        .map((x) => {
-                          const name = feedTypeName.get(Number(x.feed_type_id)) || `#${x.feed_type_id}`;
-                          return `${name}: ${Number(x.est_feed_kg_month || 0)}kg`;
-                        })
-                        .join(" • ")
-                    : "—";
+                const breakdown = feeds.length
+                  ? feeds
+                      .map((x) => {
+                        const name = feedTypeName.get(Number(x.feed_type_id)) || `#${x.feed_type_id}`;
+                        return `${name}: ${Number(x.est_feed_kg_month || 0)}kg`;
+                      })
+                      .join(" • ")
+                  : "—";
 
                 return (
                   <tr key={t.tier_id}>
@@ -350,6 +346,9 @@ export default function CoopServicePlanPage() {
           </Table>
         )}
       </div>
+
+      {/* ✅ NEW: Service availments table (RPC-driven) */}
+      <CoopServiceAvailmentsTable />
 
       {/* Coop edit modal */}
       <EditCoopServicePlanModal
