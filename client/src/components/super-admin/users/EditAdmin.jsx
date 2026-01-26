@@ -5,7 +5,7 @@ import {
   fetchUserById,
   updateUserProfile,
   suspendUser,
-} from "@/services/superadminUsers";
+} from "@/services/superAdminUsers";
 
 export default function EditAdmin() {
   const location = useLocation();
