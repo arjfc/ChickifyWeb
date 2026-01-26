@@ -141,12 +141,12 @@ export const sidebarItems = [
   {
   label: "Poultry Guide",
   icon: FiBookOpen, // or keep your preferred icon
-  roles: ["super-admin", "admin"],
+  roles: ["admin"],
   children: [
     {
       label: "Feeds",
       path: {
-        "super-admin": "/super-admin/feeds",
+        "super-admin": "/admin/feeds",
         admin: "/admin/feeds",
       },
       roles: ["super-admin", "admin"],
@@ -154,7 +154,7 @@ export const sidebarItems = [
     {
       label: "All About Eggs",
       path: {
-        "super-admin": "/super-admin/egg-handling",
+        "super-admin": "/admin/allabouteggs",
         admin: "/admin/allabouteggs",
       },
       roles: ["super-admin", "admin"],
@@ -162,7 +162,7 @@ export const sidebarItems = [
     {
       label: "Cage Management",
       path: {
-        "super-admin": "/super-admin/environment",
+        "super-admin": "/admin/cagemanagement",
         admin: "/admin/cagemanagement",
       },
       roles: ["super-admin", "admin"],
@@ -170,7 +170,7 @@ export const sidebarItems = [
     {
       label: "Hen's Health",
       path: {
-        "super-admin": "/super-admin/hens-health",
+        "super-admin": "/admin/henshealth",
         admin: "/admin/henshealth",
       },
       roles: ["super-admin", "admin"],
