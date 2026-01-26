@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { FiMenu, FiChevronLeft, FiChevronDown } from "react-icons/fi";
 import ChickyLogo from "../assets/CHICKIFY-SMALL.png";
-import { sidebarItems } from "../constants/sidebar"; // <- ensure lowercase filename
+import { sidebarItems } from "../constants/sideBar"; // <- ensure correct filename
 import { IoLogOutOutline } from "react-icons/io5";
 import Modal from "react-modal";
 import { useAuth } from "../context/AuthContext";
