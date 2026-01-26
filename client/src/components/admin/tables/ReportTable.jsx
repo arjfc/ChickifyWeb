@@ -19,7 +19,7 @@ import {
 import {
   fetchTransactionsByAdmin,
   fetchFeesCollectedByAdmin,
-} from "@/services/TransactionLogs";
+} from "@/services/Transactionlogs";
 import { fetchAdminRemittanceHistoryy } from "@/services/Remittance"; // ⬅️ NEW
 
 // pdf libs
