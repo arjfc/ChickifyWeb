@@ -25,7 +25,7 @@ import {
   getEggProductionTimeseries,
   getAdminGrossIncomeBreakdown,
   getAdminNetIncomeBreakdown,
-} from "@/services/analytics";
+} from "@/services/Analytics";
 
 // 🔁 Remittance services
 import {

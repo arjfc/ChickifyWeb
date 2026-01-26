@@ -13,7 +13,7 @@ import {
   fetchUsers,
   createUserWithPassword,
   suspendUser,
-} from "@/services/superadminUsers";
+} from "@/services/superAdminUsers";
 
 const USER_TABS = ["All", "Admin", "Farmer", "Buyer"];
 const ADMIN_VER_TABS = ["Pending", "Approved", "Rejected"];

@@ -1,6 +1,6 @@
 import React, {useEffect,useMemo,useState,forwardRef,useImperativeHandle,} from "react";
 import dayjs from "dayjs";
-import { fetchActivityLogs } from "@/services/activityLogs";
+import { fetchActivityLogs } from "@/services/Activitylogs";
 import { fetchSuperadminProfile } from "@/services/Reports"; // ✅ NEW
 
 // PDF libs

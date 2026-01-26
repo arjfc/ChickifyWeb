@@ -9,7 +9,7 @@ import Modal from "react-modal";
 import {
   fetchSizeBasePrices,
   updateSizeBasePrice,
-} from "@/services/SuperadminBasePrice";
+} from "@/services/SuperAdminBasePrice";
 
 const editModalStyle = {
   content: {

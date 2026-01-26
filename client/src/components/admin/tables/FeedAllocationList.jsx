@@ -1,6 +1,6 @@
 // amazonq-ignore-next-line// import React, { useEffect, useMemo, useState } from "react";
 // import { IoSearchOutline } from "react-icons/io5";
-// import { fetchFeedPurchases } from "@/services/feedmonitoring";
+// import { fetchFeedPurchases } from "@/services/FeedMonitoring";
 
 // export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseId, refreshKey = 0 }) {
 //   const [q, setQ] = useState("");
@@ -122,7 +122,7 @@
 // }
 import React, { useEffect, useMemo, useState } from "react";
 import { IoSearchOutline, IoAdd, IoPencil } from "react-icons/io5";
-import { fetchFeedPurchases } from "@/services/feedmonitoring";
+import { fetchFeedPurchases } from "@/services/FeedMonitoring";
 
 export default function FeedAllocationList({ onSelectPurchase, selectedPurchaseId, refreshKey = 0, onAddPurchase, onEditPurchase }) {
   const [q, setQ] = useState("");

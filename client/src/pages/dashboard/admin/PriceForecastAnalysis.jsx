@@ -1,7 +1,7 @@
 // pages/admin/PriceForecastAnalysis.jsx
 import React, { useMemo, useState, useEffect } from "react";
 import PriceForecastChart from "@/components/Charts/Admin/PriceForecastChart";
-import { getCebuSeasonalPricesLocal } from "@/services/analytics";
+import { getCebuSeasonalPricesLocal } from "@/services/Analytics";
 
 export default function PriceForecastAnalysis() {
   const [forecast, setForecast] = useState([]);

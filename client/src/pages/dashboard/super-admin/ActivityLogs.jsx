@@ -3,7 +3,7 @@ import LogsTable from "@/components/super-admin/tables/LogsTable";
 import TrackUserTable from "@/components/super-admin/tables/TrackUserLoginTable";
 import { BsGrid } from "react-icons/bs";
 import { LuCalendar } from "react-icons/lu";
-import { fetchAllActionType } from "@/services/activityLogs";
+import { fetchAllActionType } from "@/services/Activitylogs";
 
 export default function ActivityLogs() {
   // ===== Activity Logs (tabs) =====

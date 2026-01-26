@@ -5,7 +5,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import dayjs from "dayjs";
-import { fetchLastSignins } from "@/services/activityLogs";
+import { fetchLastSignins } from "@/services/Activitylogs";
 import { fetchSuperadminProfile } from "@/services/Reports"; // 👈 NEW
 
 // PDF libs
