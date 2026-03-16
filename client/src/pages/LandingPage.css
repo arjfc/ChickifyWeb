@@ -1,0 +1,1316 @@
+/* ── LANDING PAGE SCOPED STYLES ── */
+.landing-page {
+  font-family: "Poppins", sans-serif;
+  background: #fff;
+  color: #222;
+  overflow-x: hidden;
+}
+
+.landing-page *,
+.landing-page *::before,
+.landing-page *::after {
+  border-width: 0;
+  border-style: solid;
+  border-color: transparent;
+}
+
+/* ── SCROLL REVEAL ── */
+.landing-page .reveal {
+  opacity: 0;
+  transform: translateY(50px);
+  transition:
+    opacity 0.75s ease,
+    transform 0.75s ease;
+}
+.landing-page .reveal-left {
+  opacity: 0;
+  transform: translateX(-60px);
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s ease;
+}
+.landing-page .reveal-right {
+  opacity: 0;
+  transform: translateX(60px);
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s ease;
+}
+.landing-page .reveal.visible,
+.landing-page .reveal-left.visible,
+.landing-page .reveal-right.visible {
+  opacity: 1;
+  transform: translate(0);
+}
+
+/* ── PROGRESS BAR ── */
+.landing-page #progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0%;
+  background: linear-gradient(90deg, #facc15, #ff9900);
+  z-index: 9999;
+  transition: width 0.08s linear;
+}
+
+/* ── BACK TO TOP ── */
+.landing-page #back-to-top {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 46px;
+  height: 46px;
+  background: #facc15;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
+  z-index: 999;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+.landing-page #back-to-top.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.landing-page #back-to-top:hover {
+  transform: translateY(-4px);
+}
+.landing-page #back-to-top svg {
+  width: 20px;
+  height: 20px;
+  fill: #222;
+}
+
+/* ── NAVBAR ── */
+.landing-page .navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 60px;
+  background: transparent;
+  transition:
+    background 0.4s,
+    box-shadow 0.4s,
+    padding 0.4s;
+}
+.landing-page .navbar.scrolled {
+  background: rgba(250, 204, 21, 0.97);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px 60px;
+}
+.landing-page .logo img {
+  height: 72px;
+  object-fit: contain;
+  transition: height 0.3s;
+}
+.landing-page .navbar.scrolled .logo img {
+  height: 54px;
+}
+.landing-page .nav-links {
+  display: flex;
+  gap: 36px;
+  list-style: none;
+}
+.landing-page .nav-links a {
+  text-decoration: none;
+  color: #222;
+  font-weight: 600;
+  font-size: 14px;
+  position: relative;
+  transition: color 0.2s;
+  cursor: pointer;
+}
+.landing-page .nav-links a::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #222;
+  transform: scaleX(0);
+  transition: transform 0.25s;
+}
+.landing-page .nav-links a:hover::after {
+  transform: scaleX(1);
+}
+.landing-page .auth-btns {
+  display: flex;
+  gap: 10px;
+}
+.landing-page .btn-signin,
+.landing-page .btn-signup {
+  padding: 9px 24px;
+  border-radius: 20px;
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.25s;
+  border: none;
+}
+.landing-page .btn-signin {
+  background: #fff;
+  color: #222;
+}
+.landing-page .btn-signin:hover {
+  background: #222;
+  color: #facc15;
+}
+.landing-page .btn-signup {
+  background: transparent;
+  color: #222;
+  border: 2px solid #fff;
+}
+.landing-page .btn-signup:hover {
+  background: #fff;
+  color: #facc15;
+}
+
+/* ── HERO ── */
+.landing-page .hero-section {
+  position: relative;
+  min-height: 100vh;
+  background: #facc15;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-top: 100px;
+}
+.landing-page .hero-circle {
+  position: absolute;
+  background: #ffd552;
+  top: 266px;
+  right: -180px;
+  width: 888px;
+  height: 774px;
+  border-radius: 50%;
+  z-index: 0;
+  will-change: transform;
+}
+.landing-page .float-egg {
+  position: absolute;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: rgba(255, 255, 255, 0.22);
+  will-change: transform;
+  z-index: 0;
+}
+.landing-page .fe1 {
+  width: 70px;
+  height: 88px;
+  top: 12%;
+  left: 8%;
+}
+.landing-page .fe2 {
+  width: 45px;
+  height: 58px;
+  top: 55%;
+  left: 4%;
+}
+.landing-page .fe3 {
+  width: 55px;
+  height: 70px;
+  top: 20%;
+  right: 12%;
+}
+.landing-page .fe4 {
+  width: 38px;
+  height: 48px;
+  top: 70%;
+  right: 6%;
+}
+.landing-page .fe5 {
+  width: 60px;
+  height: 76px;
+  top: 40%;
+  left: 50%;
+}
+.landing-page .hero-content {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 60px 164px 0px 79px;
+  flex: 1;
+}
+.landing-page .hero-text h1 {
+  font-size: 72px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #222;
+}
+.landing-page .hero-text h1 .highlight {
+  color: #fff;
+}
+.landing-page .hero-text h1 .italic-highlight {
+  color: #fff;
+  font-style: italic;
+}
+.landing-page .hero-text p {
+  margin-top: 16px;
+  font-size: 16px;
+  color: #444;
+  line-height: 1.7;
+}
+.landing-page .btn-download {
+  display: inline-block;
+  margin-top: 32px;
+  padding: 15px 54px;
+  background: #fff;
+  color: #facc15;
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  border: none;
+  border-radius: 24px;
+  cursor: pointer;
+  transition:
+    background 0.25s,
+    color 0.25s,
+    transform 0.2s,
+    box-shadow 0.2s;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+.landing-page .btn-download:hover {
+  background: #222;
+  color: #facc15;
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+}
+.landing-page .hero-mascot {
+  position: relative;
+  z-index: 5;
+  will-change: transform;
+}
+.landing-page .hero-mascot img {
+  width: 637px;
+  filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.18));
+}
+.landing-page .social-bar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 90px 50px;
+}
+.landing-page .social-bar a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.14);
+  transition:
+    background 0.2s,
+    transform 0.2s;
+  text-decoration: none;
+}
+.landing-page .social-bar a:hover {
+  background: rgba(0, 0, 0, 0.28);
+  transform: scale(1.15);
+}
+.landing-page .social-bar svg {
+  width: 15px;
+  height: 15px;
+  fill: #222;
+}
+
+/* ── HOW IT WORKS ── */
+.landing-page .how-section {
+  padding: 90px 60px;
+  text-align: center;
+  background: #fff;
+  position: relative;
+  z-index: 2;
+  margin-top: -1px;
+}
+.landing-page .section-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #facc15;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.landing-page .how-section h2 {
+  font-size: 38px;
+  font-weight: 800;
+  margin-bottom: 54px;
+}
+.landing-page .cards-row {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.landing-page .card {
+  background: #facc15;
+  border-radius: 22px;
+  padding: 38px 28px 30px;
+  width: 260px;
+  text-align: left;
+  transition:
+    transform 0.3s,
+    box-shadow 0.3s;
+  cursor: default;
+}
+.landing-page .card:hover {
+  transform: translateY(-10px) rotate(-1deg);
+  box-shadow: 0 20px 48px rgba(250, 204, 21, 0.45);
+}
+.landing-page .card-icon {
+  width: 72px;
+  height: 72px;
+  background: #fff;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 22px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+.landing-page .card-icon svg {
+  width: 38px;
+  height: 38px;
+  stroke: #222;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.landing-page .card h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.landing-page .card p {
+  font-size: 13px;
+  color: #444;
+  line-height: 1.65;
+}
+
+/* ── WAVE ── */
+.landing-page .wave-into-about {
+  width: 100%;
+  line-height: 0;
+  font-size: 0;
+  background: #fff;
+  margin-bottom: 0;
+  position: relative;
+  z-index: 2;
+}
+.landing-page .wave-into-about svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: -2px;
+}
+/* Yellow bridge covers any sub-pixel gap at the seam */
+.landing-page .wave-into-about::after {
+  content: '';
+  display: block;
+  height: 4px;
+  background: #facc15;
+  margin-top: -2px;
+}
+.landing-page .wave-out-about {
+  width: 100%;
+  line-height: 0;
+  font-size: 0;
+  background: #facc15;
+  margin-top: -3px;
+  margin-bottom: -3px;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+.landing-page .wave-out-about svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ── ABOUT ── */
+.landing-page .about-section {
+  background: #facc15;
+  position: relative;
+  z-index: 3;
+  scroll-margin-top: 80px;
+  margin-top: -1px;
+}
+.landing-page .about-section h2 {
+  font-size: 42px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 52px;
+}
+.landing-page .about-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -402px auto 0px;
+  position: relative;
+  z-index: 5;
+  padding: 3px 120px 0px 40px;
+}
+.landing-page .about-top img {
+  width: 550px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.15));
+  position: relative;
+  z-index: 5;
+}
+.landing-page .about-right {
+  flex: 1;
+}
+.landing-page .about-right h3 {
+  font-size: 26px;
+  font-weight: 800;
+  margin-bottom: 14px;
+}
+.landing-page .about-right h3 span {
+  background: #ffe566;
+  padding: 0 6px;
+  border-radius: 4px;
+}
+.landing-page .about-right p {
+  font-size: 18px;
+  line-height: 1.85;
+  color: #333;
+  font-weight: 500;
+}
+.landing-page .mission-box {
+  margin: -157px auto 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 3px 40px 0px 120px;
+  position: relative;
+  z-index: 5;
+}
+.landing-page .mission-box img {
+  width: 550px;
+  flex-shrink: 0;
+  border-radius: 18px;
+  object-fit: cover;
+  filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.15));
+}
+.landing-page .mission-text {
+  flex: 1;
+}
+.landing-page .mission-text h3 {
+  font-size: 26px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  color: #222;
+}
+.landing-page .mission-text p {
+  font-size: 18px;
+  line-height: 1.85;
+  color: #333;
+  font-weight: 500;
+}
+
+/* ── TESTIMONIALS ── */
+.landing-page .testi-section {
+  padding: 90px 60px;
+  background: #fff;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  margin-top: -1px;
+}
+.landing-page .testi-section h2 {
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 44px;
+}
+.landing-page .testi-cards {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  flex-wrap: wrap;
+}
+.landing-page .testi-card {
+  background: #fff;
+  border: 1.5px solid #eee;
+  border-radius: 20px;
+  padding: 32px 26px;
+  width: 290px;
+  text-align: left;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  transition:
+    transform 0.3s,
+    box-shadow 0.3s;
+}
+.landing-page .testi-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+}
+.landing-page .quote-icon {
+  font-size: 52px;
+  color: #facc15;
+  line-height: 0.85;
+  margin-bottom: 14px;
+  font-family: Georgia, serif;
+}
+.landing-page .testi-card p {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.75;
+  margin-bottom: 16px;
+}
+.landing-page .testi-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.landing-page .testi-email {
+  font-size: 12px;
+  color: #888;
+}
+.landing-page .stars {
+  color: #facc15;
+  font-size: 16px;
+  margin-top: 10px;
+  letter-spacing: 2px;
+}
+
+/* ── APP SECTION ── */
+.landing-page .app-section {
+  background: #facc15;
+  padding: 80px 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 70px;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+.landing-page .app-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.18) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
+  z-index: 0;
+}
+.landing-page .app-phones {
+  display: flex;
+  gap: 0;
+  position: relative;
+  align-items: flex-end;
+  z-index: 1;
+}
+.landing-page .phone-frame {
+  width: 148px;
+  height: 295px;
+  background: #111;
+  border-radius: 30px;
+  border: 3px solid #444;
+  overflow: hidden;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.45);
+  flex-shrink: 0;
+  transition: transform 0.3s;
+}
+.landing-page .phone-frame:first-child {
+  transform: rotate(-6deg) translateX(20px);
+  z-index: 1;
+}
+.landing-page .phone-frame-front {
+  transform: rotate(3deg) translateX(-14px);
+  z-index: 2;
+}
+.landing-page .phone-frame:hover {
+  filter: brightness(1.05);
+}
+.landing-page .phone-screen {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.landing-page .phone-screen img {
+  width: 100%;
+  height: 109%;
+  object-fit: cover;
+  display: block;
+}
+.landing-page .phone-screen-1 {
+  background: #facc15;
+}
+.landing-page .phone-screen-2 {
+  background: #fff;
+}
+.landing-page .app-info {
+  max-width: 380px;
+  position: relative;
+  z-index: 1;
+}
+.landing-page .app-info h2 {
+  font-size: 34px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  color: #222;
+}
+.landing-page .app-info p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: #444;
+  margin-bottom: 28px;
+}
+.landing-page .store-btns {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.landing-page .store-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  background: #222;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.landing-page .store-btn:hover {
+  background: #000;
+  transform: translateY(-2px);
+}
+.landing-page .store-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+/* ── CONTACT ── */
+.landing-page .contact-section {
+  position: relative;
+  min-height: 480px;
+  display: flex;
+  align-items: stretch;
+  z-index: 2;
+  overflow: hidden;
+}
+.landing-page .map-placeholder {
+  flex: 1;
+  min-height: 480px;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+.landing-page .map-pin {
+  position: absolute;
+  left: 38%;
+  top: 50%;
+  transform: translate(-50%, -100%);
+  font-size: 52px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+  animation: pinBounce 1.8s ease-in-out infinite;
+}
+@keyframes pinBounce {
+  0%,
+  100% {
+    transform: translate(-50%, -100%);
+  }
+  50% {
+    transform: translate(-50%, -120%);
+  }
+}
+.landing-page .contact-address {
+  position: absolute;
+  left: 60px;
+  bottom: 110px;
+  color: #ccc;
+  font-size: 18px;
+  line-height: 1.8;
+  z-index: 3;
+}
+.landing-page .contact-us-title {
+  position: absolute;
+  left: 60px;
+  bottom: 40px;
+  color: #facc15;
+  font-size: 61px;
+  font-weight: 800;
+  z-index: 3;
+}
+.landing-page .contact-card {
+  position: absolute;
+  right: 60px;
+  top: 4%;
+  transform: translateY(-50%);
+  background: #222;
+  border-radius: 22px;
+  padding: 36px 34px;
+  width: 465px;
+  z-index: 5;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.landing-page .contact-card label {
+  display: block;
+  font-size: 11px;
+  color: #aaa;
+  margin-bottom: 5px;
+  margin-top: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.landing-page .contact-card input,
+.landing-page .contact-card textarea {
+  width: 100%;
+  background: #333;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #fff;
+  font-family: "Poppins", sans-serif;
+  font-size: 13px;
+  outline: none;
+  resize: none;
+  transition: background 0.2s;
+}
+.landing-page .contact-card input:focus,
+.landing-page .contact-card textarea:focus {
+  background: #3a3a3a;
+}
+.landing-page .contact-card textarea {
+  height: 90px;
+}
+.landing-page .btn-send {
+  width: 100%;
+  margin-top: 20px;
+  padding: 13px;
+  background: #facc15;
+  color: #222;
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.landing-page .btn-send:hover {
+  background: #f0bc00;
+  transform: translateY(-2px);
+}
+
+/* Contact form feedback banner */
+.landing-page .contact-feedback {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: "Poppins", sans-serif;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.landing-page .contact-feedback--success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+.landing-page .contact-feedback--error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* ── FOOTER ── */
+.landing-page .footer {
+  background: #1a1a1a;
+  padding: 28px 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-top: 1px solid #333;
+  position: relative;
+  z-index: 2;
+}
+.landing-page .footer-left p {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.9;
+}
+.landing-page .footer-right {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.landing-page .footer-store {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: #333;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.landing-page .footer-store:hover {
+  background: #444;
+}
+.landing-page .footer-store svg {
+  width: 16px;
+  height: 16px;
+  fill: #fff;
+}
+.landing-page .footer-socials {
+  display: flex;
+  gap: 10px;
+}
+.landing-page .footer-socials a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #333;
+  border-radius: 50%;
+  text-decoration: none;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.landing-page .footer-socials a:hover {
+  background: #facc15;
+  transform: scale(1.15);
+}
+.landing-page .footer-socials svg {
+  width: 14px;
+  height: 14px;
+  fill: #fff;
+}
+.landing-page .footer-socials a:hover svg {
+  fill: #222;
+}
+
+/* ── HAMBURGER ── */
+.landing-page .hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  z-index: 1100;
+}
+.landing-page .hamburger span {
+  display: block;
+  width: 24px;
+  height: 2.5px;
+  background: #222;
+  border-radius: 2px;
+  transition:
+    transform 0.3s,
+    opacity 0.3s;
+}
+.landing-page .menu-open .hamburger span:nth-child(1) {
+  transform: translateY(7.5px) rotate(45deg);
+}
+.landing-page .menu-open .hamburger span:nth-child(2) {
+  opacity: 0;
+}
+.landing-page .menu-open .hamburger span:nth-child(3) {
+  transform: translateY(-7.5px) rotate(-45deg);
+}
+
+.landing-page .nav-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+}
+
+/* ══════════════════════════════════════════
+   RESPONSIVE — TABLET (≤ 1024px)
+   ══════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .landing-page .navbar {
+    padding: 14px 30px;
+  }
+  .landing-page .navbar.scrolled {
+    padding: 8px 30px;
+  }
+  .landing-page .nav-links {
+    gap: 20px;
+  }
+
+  .landing-page .hero-content {
+    padding: 40px 40px 0;
+  }
+  .landing-page .hero-text h1 {
+    font-size: 48px;
+  }
+  .landing-page .hero-mascot img {
+    width: 400px;
+  }
+  .landing-page .hero-circle {
+    width: 600px;
+    height: 520px;
+    right: -120px;
+    top: 300px;
+  }
+
+  .landing-page .how-section {
+    padding: 60px 30px;
+  }
+  .landing-page .how-section h2 {
+    font-size: 32px;
+    margin-bottom: 36px;
+  }
+
+  .landing-page .about-top {
+    padding: 3px 40px 0px 30px;
+    margin-top: -280px;
+  }
+  .landing-page .about-top img {
+    width: 380px;
+  }
+  .landing-page .about-right h3 {
+    font-size: 22px;
+  }
+  .landing-page .about-right p {
+    font-size: 15px;
+  }
+  .landing-page .mission-box {
+    padding: 3px 30px 0px 40px;
+    margin-top: -100px;
+  }
+  .landing-page .mission-box img {
+    width: 380px;
+  }
+  .landing-page .mission-text h3 {
+    font-size: 22px;
+  }
+  .landing-page .mission-text p {
+    font-size: 15px;
+  }
+
+  .landing-page .testi-section {
+    padding: 60px 30px;
+  }
+  .landing-page .app-section {
+    padding: 60px 30px;
+    gap: 40px;
+  }
+
+  .landing-page .contact-card {
+    width: 380px;
+    right: 30px;
+    padding: 28px 24px;
+  }
+  .landing-page .contact-address {
+    left: 30px;
+    font-size: 15px;
+  }
+  .landing-page .contact-us-title {
+    left: 30px;
+    font-size: 42px;
+  }
+
+  .landing-page .footer {
+    padding: 24px 30px;
+  }
+  .landing-page .social-bar {
+    padding: 0 40px 40px;
+  }
+}
+
+/* ══════════════════════════════════════════
+   RESPONSIVE — MOBILE (≤ 768px)
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .landing-page .hamburger {
+    display: flex;
+  }
+  .landing-page .nav-overlay {
+    display: block;
+  }
+  .landing-page .menu-open .nav-overlay {
+    display: block;
+  }
+
+  .landing-page .nav-links {
+    position: fixed;
+    top: 0;
+    right: -280px;
+    width: 260px;
+    height: 100vh;
+    flex-direction: column;
+    gap: 0;
+    background: #facc15;
+    padding: 80px 30px 30px;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+    transition: right 0.35s ease;
+    z-index: 1050;
+  }
+  .landing-page .nav-links.open {
+    right: 0;
+  }
+  .landing-page .nav-links a {
+    font-size: 16px;
+    padding: 14px 0;
+    display: block;
+  }
+
+  .landing-page .auth-btns {
+    display: none;
+  }
+
+  .landing-page .hero-section {
+    padding-top: 80px;
+    min-height: auto;
+  }
+  .landing-page .hero-content {
+    flex-direction: column;
+    text-align: center;
+    padding: 30px 20px 107px;
+  }
+  .landing-page .hero-text h1 {
+    font-size: 34px;
+  }
+  .landing-page .hero-text p {
+    font-size: 14px;
+  }
+  .landing-page .btn-download {
+    padding: 12px 36px;
+    font-size: 13px;
+  }
+  .landing-page .hero-mascot {
+    display: none;
+  }
+  .landing-page .hero-circle {
+    width: 400px;
+    height: 350px;
+    right: -100px;
+    top: 350px;
+  }
+  .landing-page .social-bar {
+    padding: 0 20px 30px;
+    justify-content: center;
+  }
+
+  .landing-page .how-section {
+    padding: 50px 20px;
+  }
+  .landing-page .how-section h2 {
+    font-size: 26px;
+    margin-bottom: 30px;
+  }
+  .landing-page .cards-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .landing-page .card {
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .landing-page .about-top {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+    margin-top: -180px;
+  }
+  .landing-page .about-top img {
+    width: 260px;
+  }
+  .landing-page .about-right h3 {
+    font-size: 20px;
+  }
+  .landing-page .about-right p {
+    font-size: 14px;
+  }
+  .landing-page .mission-box {
+    flex-direction: column-reverse;
+    text-align: center;
+    padding: 20px;
+    margin-top: -60px;
+  }
+  .landing-page .mission-box img {
+    width: 260px;
+  }
+  .landing-page .mission-text h3 {
+    font-size: 20px;
+  }
+  .landing-page .mission-text p {
+    font-size: 14px;
+  }
+
+  .landing-page .testi-section {
+    padding: 50px 20px;
+  }
+  .landing-page .testi-section h2 {
+    font-size: 26px;
+    margin-bottom: 30px;
+  }
+  .landing-page .testi-cards {
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .landing-page .testi-card {
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .landing-page .app-section {
+    flex-direction: column;
+    padding: 50px 20px;
+    gap: 30px;
+    text-align: center;
+  }
+  .landing-page .app-info {
+    max-width: 100%;
+  }
+  .landing-page .app-info h2 {
+    font-size: 26px;
+  }
+  .landing-page .store-btns {
+    justify-content: center;
+  }
+
+  .landing-page .contact-section {
+    flex-direction: column;
+    min-height: auto;
+  }
+  .landing-page .map-placeholder {
+    min-height: 280px;
+  }
+  .landing-page .contact-address {
+    left: 20px;
+    bottom: 80px;
+    font-size: 14px;
+  }
+  .landing-page .contact-us-title {
+    left: 20px;
+    bottom: 20px;
+    font-size: 32px;
+  }
+  .landing-page .contact-card {
+    position: relative;
+    right: auto;
+    top: auto;
+    transform: none;
+    width: 100%;
+    border-radius: 0;
+    padding: 30px 20px;
+  }
+
+  .landing-page .footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 24px 20px;
+  }
+  .landing-page .footer-right {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* ══════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE (≤ 480px)
+   ══════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .landing-page .navbar {
+    padding: 10px 16px;
+  }
+  .landing-page .navbar.scrolled {
+    padding: 6px 16px;
+  }
+  .landing-page .logo img {
+    height: 50px;
+  }
+  .landing-page .navbar.scrolled .logo img {
+    height: 40px;
+  }
+
+  .landing-page .hero-text h1 {
+    font-size: 28px;
+  }
+  .landing-page .hero-text p {
+    font-size: 13px;
+  }
+  .landing-page .hero-mascot img {
+    width: 220px;
+  }
+  .landing-page .hero-circle {
+    width: 567px;
+    height: 322px;
+  }
+
+  .landing-page .how-section h2 {
+    font-size: 22px;
+  }
+
+  .landing-page .about-top img {
+    width: 200px;
+  }
+  .landing-page .about-top {
+    margin-top: -120px;
+  }
+  .landing-page .mission-box img {
+    width: 200px;
+  }
+  .landing-page .mission-box {
+    margin-top: -30px;
+  }
+
+  .landing-page .testi-section h2 {
+    font-size: 22px;
+  }
+
+  .landing-page .app-info h2 {
+    font-size: 22px;
+  }
+  .landing-page .phone-frame {
+    width: 120px;
+    height: 240px;
+  }
+
+  .landing-page .contact-us-title {
+    font-size: 26px;
+  }
+}

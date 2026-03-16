@@ -199,8 +199,6 @@
 import React, { useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import ChickyHero from "../../assets/chickenHero.png";
-import ChickifyLogo from "../../assets/CHICKIFY.png"; // ⬅️ adjust path/name if different
 
 const ROLE_HOME = {
   superadmin: "/super-admin",
@@ -277,9 +275,68 @@ export default function SignIn() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 sm:px-10 md:px-20">
-      <div className="flex flex-col md:flex-row items-center justify-center gap-12">
+    <div className="relative min-h-screen flex flex-col overflow-hidden"
+         style={{ background: "#facc15" }}>
+      {/* Hero circle — bigger */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          background: "#ffd552",
+          width: "1100px",
+          height: "1100px",
+          top: "-100px",
+          right: "-260px",
+          zIndex: 0,
+        }}
+      />
+
+      {/* Floating eggs */}
+      <div className="absolute" style={{ width: 70, height: 88, top: "12%", left: "8%", borderRadius: "50% 50% 50% 50% / 60% 60% 40% 40%", background: "rgba(255,255,255,0.22)", zIndex: 0 }} />
+      <div className="absolute" style={{ width: 45, height: 58, top: "55%", left: "4%", borderRadius: "50% 50% 50% 50% / 60% 60% 40% 40%", background: "rgba(255,255,255,0.22)", zIndex: 0 }} />
+      <div className="absolute" style={{ width: 55, height: 70, top: "20%", right: "12%", borderRadius: "50% 50% 50% 50% / 60% 60% 40% 40%", background: "rgba(255,255,255,0.22)", zIndex: 0 }} />
+      <div className="absolute" style={{ width: 38, height: 48, top: "70%", right: "6%", borderRadius: "50% 50% 50% 50% / 60% 60% 40% 40%", background: "rgba(255,255,255,0.22)", zIndex: 0 }} />
+      <div className="absolute" style={{ width: 60, height: 76, top: "40%", left: "50%", borderRadius: "50% 50% 50% 50% / 60% 60% 40% 40%", background: "rgba(255,255,255,0.22)", zIndex: 0 }} />
+
+      <style>{`
+        @keyframes siginFadeUp {
+          from { opacity: 0; transform: translateY(40px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sigInSlideLeft {
+          from { opacity: 0; transform: translateX(60px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes sigInBackBtn {
+          from { opacity: 0; transform: translateY(-16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
+      {/* Top navbar bar with Back to Home */}
+      <div
+        className="relative z-10 flex items-center px-8 py-4"
+        style={{ animation: "sigInBackBtn 0.5s ease both" }}
+      >
+        <button
+          type="button"
+          onClick={() => nav("/")}
+          className="cursor-pointer flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-full"
+          style={{ background: "#fff", color: "#222" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#222"; e.currentTarget.style.color = "#facc15"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#222"; }}
+        >
+          <svg viewBox="0 0 24 24" style={{ width: 16, height: 16, fill: "currentColor" }}>
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+          </svg>
+          Back to Home
+        </button>
+      </div>
+
+      {/* Main content */}
+      <div className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-10 md:px-20">
+        <div className="flex flex-col lg:flex-row items-center justify-center gap-12">
         <form
+          style={{ animation: "siginFadeUp 0.65s ease both 0.1s" }}
           onSubmit={handleSubmit}
           className="bg-white rounded-xl shadow-md p-8 sm:p-10 w-full md:w-[720px] lg:w-[550px]
                      h-[560px] md:h-[620px] lg:h-[500px] flex flex-col overflow-y-auto"
@@ -351,23 +408,23 @@ export default function SignIn() {
           </p>
         </form>
 
-       {/* Hero + CHICKIFY image (right side) */}
-<div className="relative w-[420px] h-[560px]">
-  {/* ChickyHero – slightly lower */}
-  <img
-    src={ChickyHero}
-    alt="Chickify Hero"
-    className="absolute top-1 left-1/2 -translate-x-1/2 w-[400px] h-auto"
-  />
+       {/* Mascot — right side, full height like hero */}
+        <div
+          className="hidden lg:flex items-end justify-center"
+          style={{ animation: "sigInSlideLeft 0.7s ease both 0.25s", height: "520px" }}
+        >
+          <img
+            src="/chickify-brandmark.png"
+            alt="Chickify mascot"
+            style={{
+              height: "100%",
+              width: "auto",
+              filter: "drop-shadow(0 24px 48px rgba(0,0,0,0.18))",
+            }}
+          />
+        </div>
 
-  {/* CHICKIFY logo – same size, under hero, a bit to the right */}
-  <img
-    src={ChickifyLogo}
-    alt="Chickify Logo"
-    className="absolute top-[265px] left-[62%] -translate-x-1/2 w-[450px] h-auto"
-  />
-</div>
-
+      </div>
       </div>
     </div>
   );

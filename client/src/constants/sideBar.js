@@ -1,6 +1,3 @@
-// src/constants/sidebar.js
-
-// Icons
 import { FiSettings, FiBookOpen } from "react-icons/fi";
 import { CiGrid42 } from "react-icons/ci";
 import {
@@ -28,56 +25,16 @@ export const sidebarItems = [
     roles: ["super-admin", "admin"],
   },
 
-  // ---- User Management (split) ----
-  // Super Admin: dropdown with children
-  // {
-  //   label: "User Management",
-  //   icon: LuUserCog,
-  //   roles: ["super-admin"],
-  //   children: [
-  //     {
-  //       label: "Manage Users",
-  //       path: { "super-admin": "/super-admin/users" },
-  //       roles: ["super-admin"],
-  //     },
-      // {
-      //   label: "Suspicious Activities",
-      //   path: { "super-admin": "/super-admin/suspicious-activities" },
-      //   roles: ["super-admin"],
-      // },
-  //   ],
-  // },
-  // // Admin: single link (no dropdown)
-  // {
-  //   label: "User Management",
-  //   path: { admin: "/admin/users" },
-  //   icon: LuUserCog,
-  //   roles: ["admin"],
-  // },
-
   {
-  label: "User Management",
-  icon: LuUserCog,
-  roles: ["super-admin", "admin"], 
-  path: {
-    "super-admin": "/super-admin/users",
-    admin: "/admin/users",
+    label: "User Management",
+    icon: LuUserCog,
+    roles: ["super-admin", "admin"],
+    path: {
+      "super-admin": "/super-admin/users",
+      admin: "/admin/users",
+    },
   },
-} ,
 
-  // Super Admin only
-  // {
-  //   label: "Product Management",
-  //   path: { "super-admin": "/super-admin/product-management" },
-  //   icon: RiShoppingBag3Line,
-  //   roles: ["super-admin"],
-  // },
-  // {
-  //   label: "Orders",
-  //   path: { "super-admin": "/super-admin/orders" },
-  //   icon: GrBasket,
-  //   roles: ["super-admin"],
-  // },
   {
     label: "Pricing Management",
     path: { "super-admin": "/super-admin/pricing" },
@@ -109,11 +66,6 @@ export const sidebarItems = [
         path: { admin: "/admin/products/egg-inventory" },
       },
       { label: "Product Details", path: { admin: "/admin/products/details" } },
-      // { label: "Discount Management", path: { admin: "/admin/products/discount-management" } },
-      // {
-      //   label: "Price Management",
-      //   path: { admin: "/admin/products/price-management" },
-      // },
     ],
   },
   {
@@ -126,61 +78,57 @@ export const sidebarItems = [
         path: { admin: "/admin/expenses/feed-monitoring" },
       },
       { label: "Feed Entry", path: { admin: "/admin/expenses/feed-entry" } },
-      // { label: "Business",        path: { admin: "/admin/expenses/business" } },
       { label: "Expense", path: { admin: "/admin/expenses/expense" } },
     ],
   },
-    {
+  {
     label: "Service Plan",
     icon: LuPackage,
     roles: ["admin"],
-    path: { admin: "/admin/service-plan" } },
-  
-  
-  //shared
+    path: { admin: "/admin/service-plan" },
+  },
+
   {
-  label: "Poultry Guide",
-  icon: FiBookOpen, // or keep your preferred icon
-  roles: ["admin"],
-  children: [
-    {
-      label: "Feeds",
-      path: {
-        "super-admin": "/admin/feeds",
-        admin: "/admin/feeds",
+    label: "Poultry Guide",
+    icon: FiBookOpen,
+    roles: ["admin"],
+    children: [
+      {
+        label: "Feeds",
+        path: {
+          "super-admin": "/admin/feeds",
+          admin: "/admin/feeds",
+        },
+        roles: ["super-admin", "admin"],
       },
-      roles: ["super-admin", "admin"],
-    },
-    {
-      label: "All About Eggs",
-      path: {
-        "super-admin": "/admin/allabouteggs",
-        admin: "/admin/allabouteggs",
+      {
+        label: "All About Eggs",
+        path: {
+          "super-admin": "/admin/allabouteggs",
+          admin: "/admin/allabouteggs",
+        },
+        roles: ["super-admin", "admin"],
       },
-      roles: ["super-admin", "admin"],
-    },
-    {
-      label: "Cage Management",
-      path: {
-        "super-admin": "/admin/cagemanagement",
-        admin: "/admin/cagemanagement",
+      {
+        label: "Cage Management",
+        path: {
+          "super-admin": "/admin/cagemanagement",
+          admin: "/admin/cagemanagement",
+        },
+        roles: ["super-admin", "admin"],
       },
-      roles: ["super-admin", "admin"],
-    },
-    {
-      label: "Hen's Health",
-      path: {
-        "super-admin": "/admin/henshealth",
-        admin: "/admin/henshealth",
+      {
+        label: "Hen's Health",
+        path: {
+          "super-admin": "/admin/henshealth",
+          admin: "/admin/henshealth",
+        },
+        roles: ["super-admin", "admin"],
       },
-      roles: ["super-admin", "admin"],
-    },
-  ],
-},
-  
-  
-  
-    {
+    ],
+  },
+
+  {
     label: "Order Status",
     path: { admin: "/admin/order-status" },
     icon: GrBasket,
@@ -216,9 +164,6 @@ export const sidebarItems = [
     icon: LuFileText,
     roles: ["admin"]
   },
-
-
-  
 
   // Shared
   {
