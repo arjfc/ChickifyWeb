@@ -500,7 +500,7 @@ export default function LandingPage() {
       <div className="contact-section" id="contact">
         <div className="map-placeholder">
           <div className="contact-address">
-            chickifysupport@gmail.com
+            chickify.notifications@gmail.com
             <br />
             {/* 09876787878 */}
           </div>
